@@ -23,7 +23,7 @@ paths:                              # relative to the repository root
 #                function pass `python eval/smoke.py`. Override per run with LEXSHIFT_STUBS=none|all|search,health
 stubs:
   search: true       # M1  m1_index.search
-  statute: true      # M2  m2_statute.parse_query + continuity
+  statute: false      # M2  m2_statute.parse_query + continuity
   health: true       # M3  m3_treatment.health
   authority: true    # M3  m3_treatment.authority
 
