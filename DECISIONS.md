@@ -95,6 +95,23 @@ updates, judgments from 1950 to 2025, raw JSON metadata, parquet metadata and zi
 parquet schema and field list, size, judgment count, whether judgments are PDFs or text, availability of citation metadata,
 how often BNS/BNSS appear, which citation formats occur, how often "overruled" appears in non-precedent senses.
 
+### D-012 (2026-10-06) How weights are tuned
+`python -m eval.run_ablation --tune` grid-searches the weight simplex of each multi-signal config (b1, full) on the DEV
+split only, objective mean nDCG@10. Grid step 0.1 (about ten dev queries would only fit noise on a finer grid); relevance
+keeps a floor weight of 0.3 (`--min-rel`), because the other signals re-rank BM25 candidates rather than replace relevance,
+which is a design choice and not a finding; ties go to the vector nearest the starting weights, then lexicographic order,
+so the result is deterministic. The dev-only rule is enforced in code (`eval.tuning.TuningError` on any non-dev query), the
+result is saved to `common/weights_tuned.yaml` and reported as "tuned on dev", a dev table produced right after tuning is
+labelled optimistic, and a stub run saves nothing.
+
+### D-013 (2026-10-06) rank() is collect() plus fuse()
+`m4_rank.rank.collect` gathers each query's raw signals once and `fuse_collected` ranks them for any weight vector, so the
+ablation and the tuning grid never repeat provider calls (a grid of 120 vectors would otherwise cost 120 search/continuity/
+health/authority passes per query). Only the signals a config weights are collected, so b0 never touches M2 or M3.
+Provider output is checked against `common/contracts.py` at runtime and a violation raises `ContractViolation`, because a
+malformed signal must fail loudly instead of quietly reordering a ranking. Evidence is shown strongest-first as M3 returns it,
+truncated to `ranking.max_evidence`; the explanation still counts the full list.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

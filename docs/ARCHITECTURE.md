@@ -82,8 +82,12 @@ where each concept is in the code.
 | Jaccard / cosine on section text (stretch) | `m2_statute/mapping.py` | M2 | planned |
 | Citation graph, PageRank, static quality score g(d) | `m3_treatment/graph.py`, `m3_treatment/scores.py` | M3 | planned |
 | Proximity windows, Jaccard matching | `m3_treatment/windows.py`, `m3_treatment/resolver.py` | M3 | planned |
-| Net score (static quality + relevance), score normalisation | `m4_rank/` | M4 | see the status table in the README |
-| P@k, Recall@k, MAP, nDCG, pooling, ablation | `eval/` | M4 | see the status table in the README |
+| Net score (relevance combined with static quality scores g(d)) | `m4_rank/fusion.py` | M4 | implemented; tested on fixtures, not yet on real data |
+| Score normalisation (min-max, identity) | `m4_rank/normalize.py` | M4 | implemented; see DECISIONS.md D-006 |
+| Heap-based top-K over the fused scores | `m4_rank/fusion.py` | M4 | implemented |
+| P@k, Recall@k, MAP, nDCG, harmful@k, bootstrap intervals | `eval/metrics.py` | M4 | implemented; checked against hand-computed values |
+| Ablation B0 / B1 / full, DEV-only weight tuning | `eval/run_ablation.py`, `eval/tuning.py` | M4 | implemented; needs the real modules and the hand-made qrels |
+| Pooling of the top-20 of every system for judging | `eval/pool.py` | M4 | planned |
 
 Libraries are allowed but must be explained in IR terms in the report: for example `rank_bm25` (M1) is used only as a
 sanity check against our own BM25, never in the live path.

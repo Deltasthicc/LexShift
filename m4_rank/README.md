@@ -7,17 +7,45 @@ stubs and the real modules replace them one by one.
 
 ## What you build
 
-- [ ] `rank()`: top-100 from `search()`, add continuity, health and authority, normalise, weighted sum, return top-K with the
-      per-signal breakdown and an explanation. `rank.py`
-- [ ] Ablation configs: **B0** BM25 only, **B1** + statute continuity, **full** (+ health + authority)
+- [x] `rank()`: top-100 from `search()`, add continuity, health and authority, normalise, weighted sum, return top-K with the
+      per-signal breakdown and an explanation. `rank.py`, `fusion.py`, `normalize.py`, `explain.py`, `weights.py`
+- [x] Ablation configs: **B0** BM25 only, **B1** + statute continuity, **full** (+ health + authority). `common/config.yaml`
 - [ ] 30 queries (10 dev, 20 test), four types: **A** BNS query needing an IPC precedent, **B** changed or omitted
       provisions, **C** doctrines with overruled cases, **D** bare-number collisions. Written by hand. `eval/queries.jsonl`
 - [ ] Graded qrels from the pooled top-20 of all configs, two judges: 2 = relevant and good law, 1 = relevant but law
       materially changed or precedent criticised, 0 = irrelevant or overruled on the queried point. `eval/qrels.tsv`
-- [ ] Metrics: P@5, Recall@10, MAP, nDCG@10, harmful@10 (overruled cases in the top 10). Tune weights on **dev only**.
-      `eval/metrics.py`, `eval/run_ablation.py`
-- [ ] Demo (CLI or Streamlit) with score breakdowns and evidence sentences. `app/`
-- [ ] README, report skeleton, video script
+      (the pooling and judge-sheet tool, `eval/pool.py`, is still to do)
+- [x] Metrics: P@5, Recall@10, MAP, nDCG@10, harmful@10 (overruled cases in the top 10), plus P@10 and judged@10. Tune weights
+      on **dev only**. `eval/metrics.py`, `eval/tuning.py`, `eval/run_ablation.py`
+- [x] Demo (CLI) with score breakdowns and evidence sentences. `app/cli.py`. A Streamlit page is optional and not started
+- [ ] README (kept current), report skeleton, video script
+
+## How the code fits together
+
+```
+common.providers.load_providers()  -> real functions or labelled stubs, per config.yaml
+        |
+m4_rank.rank.collect()             -> top-100 hits + the signals a config needs, raw, contract-checked
+        |
+m4_rank.fusion.fuse()              -> normalise per signal, weighted sum, heap top-K, Result + explanation
+        |
+eval.run_ablation / app.cli        -> metrics tables, chart, demo
+```
+
+* Weights per config live in `common/config.yaml` (`ranking.configs`) and are placeholders until tuned. A tuned set is saved
+  to `common/weights_tuned.yaml` by `--tune` and then used automatically.
+* Normalisation is configured per signal (`ranking.normalize`): min-max for `rel` and `auth`, identity for `cont` and
+  `health`. The reason is DECISIONS.md D-006.
+* `collect()` and `fuse_collected()` are split so evaluation and tuning never repeat provider calls (D-013).
+
+## Commands
+
+```bash
+python -m app.cli "BNS 103 murder" --offence-date 2025-01-10 --verbose
+python -m eval.run_ablation --tune --split test     # tune on dev, report test
+python -m eval.run_ablation --split test
+python -m app.docmeta                                # optional: titles for the demo, from judgments.jsonl
+```
 
 ## You hand over
 

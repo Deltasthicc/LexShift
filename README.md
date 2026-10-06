@@ -140,6 +140,39 @@ such as `search,health`.
 
 The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
 
+## Demo
+
+```bash
+python -m app.cli "BNS 103 murder" --offence-date 2025-01-10 -k 3 --verbose
+```
+
+Options: `--config b0|b1|full` (the ablation systems), `-k`, `--json` for machine-readable output, `--verbose` to also show
+the query parse, the weights and the raw signals. Each result shows its score components, the reason behind each signal
+(for continuity, the statute mapping; for health, the label and the citing judgment) and the evidence sentences.
+
+Until M1 to M3 land their real functions the demo runs on the labelled stand-ins and says so loudly. This is real output of
+that mode, **not a search result** (the ids and sentences are placeholders):
+
+```
+LexShift  |  config full  |  top 3  |  offence date 2025-01-10
+query: BNS 103 murder
+
+*** STUB MODE: rel, cont, health, auth come from fixed-value stand-ins, not from real data. This output is NOT a result. ***
+
+ 1. STUB-001   final 0.988
+      rel    [####################]  1.00 x 0.50 = 0.500 (BM25 14.20)
+      cont   [####################]  1.00 x 0.20 = 0.200 (STUB: fixed value, not computed from any judgment)
+      health [####################]  1.00 x 0.20 = 0.200
+      auth   [##################..]  0.88 x 0.10 = 0.088 (raw 0.80)
+ ...
+ 4. STUB-003   final 0.723
+      health [############........]  0.60 x 0.20 = 0.120 (doubted per STUB-000)
+      evidence: doubted in STUB-000: "STUB: fixed value, not computed from any judgment (placeholder sentence)"
+```
+
+If `data/processed/doc_meta.jsonl` exists (`python -m app.docmeta` derives it from `judgments.jsonl`), case titles, dates and
+bench sizes are shown next to each id.
+
 ## Data
 
 Primary corpus: the **Indian Supreme Court Judgments** dataset on AWS Open Data
@@ -156,6 +189,17 @@ provisions, doctrines with overruled cases, and bare-number collisions. Relevanc
 pooled top-20 of every system. Metrics: P@5, Recall@10, MAP, nDCG@10 and harmful@10 (known-overruled cases in the top 10).
 Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/README.md).
 
+Reproduce the table with one command, once the real modules and the hand-made queries and judgements exist:
+
+```bash
+python -m eval.run_ablation --tune --split test   # tune weights on DEV, report TEST
+python -m eval.run_ablation --split test          # report TEST with the saved weights
+```
+
+It writes `ablation_test.csv`, `per_query_test.csv`, a Markdown table (with paired-bootstrap intervals against B0 and a
+per-query-type breakdown) and a chart into `eval/results/`. It refuses to run on stub providers (and `--tune` refuses to see
+a test query), and with no queries or judgements it says so instead of printing numbers.
+
 ## Status
 
 *Last updated 2026-10-06. This table is the honest state of `main`; each owner updates their row when they merge.*
@@ -166,10 +210,11 @@ Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/
 | M1 corpus, index and `search()` | Skeleton and spec only; served by a stub |
 | M2 statute layer | Skeleton and spec only; served by a stub; `statute_map.csv` is header-only |
 | M3 citations and treatment | Skeleton and spec only; served by stubs; no labels yet |
-| M4 `rank()`, evaluation, demo | Skeleton only on `main`; in progress on `m4-rank` |
+| M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, and the CLI demo are implemented and unit-tested against fixtures and the stubs (branch `m4-rank`; skeleton only on `main` until it is merged) |
 | Judged queries and qrels | Not written yet (they are made by hand) |
 
-No retrieval-quality result has been measured yet, so none is claimed here.
+No retrieval-quality result has been measured yet, so none is claimed here. The unit tests check the arithmetic against
+hand-computed values on small synthetic fixtures; they say nothing about how well LexShift retrieves.
 
 ## Ethics, data use and AI use
 
