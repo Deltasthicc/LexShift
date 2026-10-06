@@ -130,7 +130,7 @@ set and a second pooling round; a tiered index.
 demo and the delivery. `<FILL: owner names; they are deliberately not stored in the repository>`
 
 **AI-use declaration.** Claude Code (Claude Sonnet 5.5 for the shared skeleton and M4, Claude Opus 5.5 as M3's coding assistant) generated
-code, tests, documents and tooling, listed entry by entry in `AI_USE_LOG.md`. The 25 example queries in `eval/examples` were AI-suggested as
+code, tests, documents and tooling, listed entry by entry in `AI_USE_LOG.md`. The 30 candidate queries in `eval/examples` were AI-suggested as
 a starting point and are not part of the judged set. A language model (`gemini-2.5-flash`) labels citation windows offline for the
 treatment signal, with cached outputs, and is scored against a hand-labelled gold set. **Every relevance grade, the gold overruling list and the
 treatment gold set are assigned by people.** `<FILL: which parts of the AI-generated code each member reviewed, from the Human review column; entries still marked pending must be reviewed or the declaration says so>`

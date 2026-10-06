@@ -116,10 +116,11 @@ def test_the_shipped_example_queries_are_loadable_and_balanced():
 
     root = Path(__file__).resolve().parents[1] / "eval" / "examples"
     queries = load_queries(root / "queries.example.jsonl")
-    assert len(queries) == 25 and len({x.qid for x in queries}) == 25
+    assert len(queries) == 30 and len({x.qid for x in queries}) == 30
     counts = Counter((x.split, x.type) for x in queries)
-    assert sum(1 for x in queries if x.split == "dev") == 10 and sum(1 for x in queries if x.split == "test") == 15
+    assert sum(1 for x in queries if x.split == "dev") == 10 and sum(1 for x in queries if x.split == "test") == 20
     assert {t for s, t in counts if s == "dev"} == set("ABCD")  # every type on dev
+    assert {t for s, t in counts if s == "test"} == set("ABCD")  # every type on test
     # a bare "section N" query and a BNS query always carry the offence date that decides the code
     assert all(x.offence_date for x in queries if x.type in "AD") and all(x.offence_date for x in queries if x.type == "B")
     assert all(x.offence_date is None for x in queries if x.type == "C")  # doctrine queries carry no date

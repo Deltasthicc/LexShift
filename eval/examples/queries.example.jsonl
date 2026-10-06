@@ -23,3 +23,8 @@
 {"qid": "test13", "text": "section 103", "offence_date": "2025-02-01", "split": "test", "type": "D"}
 {"qid": "test14", "text": "section 318", "offence_date": "2020-06-01", "split": "test", "type": "D"}
 {"qid": "test15", "text": "section 318", "offence_date": "2025-02-01", "split": "test", "type": "D"}
+{"qid": "test16", "text": "attempt to murder with intention or knowledge under section 109 BNS", "offence_date": "2025-04-15", "split": "test", "type": "A"}
+{"qid": "test17", "text": "admissibility of electronic evidence without a section 65B certificate", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test18", "text": "confessional statement to an NDPS officer under section 67", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test19", "text": "whether the informant and investigating officer may be the same person", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test20", "text": "automatic vacation of a High Court stay after six months in criminal proceedings", "offence_date": null, "split": "test", "type": "C"}

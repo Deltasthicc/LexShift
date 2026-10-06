@@ -1,6 +1,6 @@
 """Can the corpus answer a query at all? A counting tool for the person writing the judged queries. It never grades anything.
 
-    python -m eval.feasibility                       # the queries in eval/queries.jsonl, else the 25 suggested examples
+    python -m eval.feasibility                       # the queries in eval/queries.jsonl, else the 30 suggested candidates
     python -m eval.feasibility --queries my.jsonl    # any file in the queries.jsonl format
     python -m eval.feasibility --json
 

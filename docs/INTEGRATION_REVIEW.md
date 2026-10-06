@@ -19,6 +19,20 @@ artefacts and calls its real functions and prints the findings below grouped by 
 and scaling tests are in `tests/test_robustness.py`; the connection tests are in `tests/test_integration_connections.py` and
 `tests/test_m4_m3_integration.py`.
 
+## Update, 2026-10-07: what the remote branches hold now
+
+Fetched `origin` and compared every branch with `m4-rank`. **Only `m1-index` moved** (one new commit, `287846e` "Normalize judgment dates to ISO format", merged
+here). `main` (`76ad44c`), `m2-statute` (`f0a629d`) and `m3-treatment` (`7777a6b`) hold nothing that `m4-rank` does not already contain.
+
+| After merging `287846e` | Result |
+|---|---|
+| `judgments.jsonl` dates | **Fixed**: 200 of 200 are ISO (`2025-01-02`); the date failure is gone from `eval.conformance` and from the smoke gate |
+| `judgments.jsonl` against the `Judgment` contract | 173 of 200 valid; the 27 others have `bench_size` 0 (finding M1-7). With the real search and statute switched on, `eval/smoke.py` fails on exactly this and nothing else, so **`bench_size` is now the only thing between M1 and flipping `stubs.search`** |
+| `data/processed/index/tokenized_judgments.jsonl` | **Not fixed**: still `29 May 2025` style dates in 200 of 200 records (M1's year filter reads either shape, so nothing breaks) |
+| M3 on the merged corpus (extract and resolve only, no labels) | runs; 7,051 mentions, 51 resolved to a corpus judgment (0.7%), 20 distinct citing-to-cited edges, 477 tagged appeal history; bench known for 200 of 200 because M3 falls back to the coram line when `bench_size` is 0 |
+| Whole suite | 519 passed, 2 expected failures (the known `parse_atom` and `extract_refs` cases) |
+| `eval.feasibility` on the 30 candidate queries | 3 answerable, 17 thin, 10 empty (the 200 judgments are all from 2025) |
+
 ## Where each module stands
 
 | Module | Code | Connected to the others as pushed | After the fixes on `m4-rank` | Still open for the owner |
@@ -42,23 +56,23 @@ DECISIONS.md D-026 so the owner can take it or replace it); **Open** means the o
 | 3 | Blocker | Any query without explicit operators raised `ValueError: Unexpected token`: `BNS 103`, `punishment for murder under section 103 BNS`, `cheating and dishonestly inducing delivery of property`. Only single words and Boolean syntax worked, so the headline demo query failed | **Fixed** (plain text is ranked as a bag of words; `3(5)` and `u/s` are not treated as operators) |
 | 4 | High | Importing the package built a 70 MB engine (11 s) and printed five lines to stdout, which corrupts `--json` | **Fixed** (built on first use, no printing) |
 | 5 | High | `parse_atom` raises `IndexError`, not `ValueError`, when a query ends after an operator or an open parenthesis (`murder AND`, `(`). Found by randomised input | **Open** (`tests/test_robustness.py`, marked as a known failure; the demo now reports it as one clear line) |
-| 6 | High | `judgments.jsonl` violates the shared `Judgment` contract in **0 of 200** records: `date` is `02 January 2025`, the contract says `2025-01-02`. M1's own year filter returned 0 hits for `year=2025` and raised `TypeError` for `min_year`; M3 crashed | Code **fixed** (year read from either shape). **Open**: the data must be regenerated with ISO dates, in `judgments.jsonl` and the tokenised copy |
+| 6 | High | **Fixed by M1 in `judgments.jsonl` (`287846e`, 2026-10-07); the tokenised copy still has the old dates.** Before: `judgments.jsonl` violated the shared `Judgment` contract in **0 of 200** records: `date` is `02 January 2025`, the contract says `2025-01-02`. M1's own year filter returned 0 hits for `year=2025` and raised `TypeError` for `min_year`; M3 crashed | Code **fixed** (year read from either shape). **Open**: regenerate the tokenised copy with ISO dates too |
 | 7 | High | `bench_size` is wrong. 27 records have `0` (invalid; 14 of them print the coram line in the text); records with 3 or more judges are never right (0 of 10: stored as 2 or 0); overall 105 of 122 agree with the printed coram line. M3's bench check needs this: a larger bench can never be recognised | **Open** |
 | 8 | Medium | `nltk` was not in `requirements.txt` and the stop-word corpus must be downloaded: a clean clone failed at import with a `LookupError`. Later, with NLTK 3.10, a machine whose AppData folder is redirected (the Windows desktop app's shell) failed at import with a `ValueError` from NLTK's path-security check | **Fixed** (`nltk` declared, clear message, CI downloads it, and the file is read directly when NLTK rejects the path) |
 | 9 | Medium | The zone splitter hard-codes paragraph numbers (paragraphs 1-4 facts, 5-6 arguments, 12 and up holding, 7-11 in no zone; a comment says "for this judgment"). Text outside every zone is invisible to BM25: 3 of 66 matches for `murder` score exactly 0. For a long judgment `holding` is nearly the whole text, so zone weights mean little | **Open** |
 | 10 | Medium | The corpus cannot be rebuilt from the repo: `ingest.py`, `index.py` and `scoring.py` are still skeletons, so `make download` and `make build-index` print "not implemented". `parser.py` is byte-identical to `query_parser.py`, `text_tokenizer.py` to `tokenizer.py`. 90 MB of derived data (index, tokenised copy) is committed. No tests were committed | **Open** |
-| 11 | High | The sample is one year (2025), and it cannot support the evaluation: `python -m eval.feasibility` on the 25 example queries finds 2 answerable, 16 thin (3 or fewer judgments hold the words or the section) and 7 empty; section 103 is mentioned in one judgment and section 318 in none. Older citations cannot resolve and no precedent can be overruled inside the corpus, so the treatment signal has nothing to find; the evaluation needs older cases and more of them. Control characters (`\x08`, `\x07`) are in all 200 texts (184 headnotes) | **Open**; M4 now strips them for display |
+| 11 | High | The sample is one year (2025), and it cannot support the evaluation: `python -m eval.feasibility` on the 30 candidate queries finds 3 answerable, 17 thin (3 or fewer judgments hold the words or the section) and 10 empty; section 103 is mentioned in one judgment and section 318 in none. Older citations cannot resolve and no precedent can be overruled inside the corpus, so the treatment signal has nothing to find; the evaluation needs older cases and more of them. Control characters (`\x08`, `\x07`) are in all 200 texts (184 headnotes) | **Open**; M4 now strips them for display |
 | 12 | Low | Scale: the index is 0.171 MB of JSON per judgment (measured), so about 5 GB at 30,000 judgments (an extrapolation), loaded into memory twice (`RankedSearchEngine` and `SearchEngine` each load it). The laptop-CPU requirement is at risk at full size | **Open** |
 
 **What to send M1**
 > Your Boolean, phrase and proximity logic is correct (I checked it against brute force). Before it could be used I changed
 > `search.py` and `searcher.py` (paths, shared `Hit`, plain-text queries, lazy engine, year filter) and the two tokenizers
 > (clear NLTK message): please keep those, or replace them with your own fix. What only you can do:
-> (1) regenerate `judgments.jsonl` and the tokenised copy with ISO dates (`2025-01-02`); (2) fix `bench_size`: read the coram line
+> (1) thank you for the ISO dates in `judgments.jsonl`: regenerate the tokenised copy the same way (it still has `29 May 2025`); (2) fix `bench_size`: read the coram line
 > (`[A, B and C, JJ.]`, with `*` marking the author) and never write 0, use null when unknown; every 3+ judge bench is currently
 > wrong; (3) make `parse_atom` raise `ValueError` at the end of input; (4) replace the hard-coded paragraph numbers in `zones.py`;
 > (5) implement `ingest.py` and `index.py` so `make build-index` rebuilds the corpus, stop committing the index and the tokenised
-> copy, and add tests; (6) grow the corpus in volume and in years, with the older judgments (the overruling cases): `python -m eval.feasibility` shows 2 of the 25 example queries answerable on the current 200 judgments of 2025. Run `python -m eval.conformance --module m1`.
+> copy, and add tests; (6) grow the corpus in volume and in years, with the older judgments (the overruling cases): `python -m eval.feasibility` shows 3 of the 30 candidate queries answerable on the current 200 judgments of 2025. Run `python -m eval.conformance --module m1`.
 
 ---
 
@@ -147,7 +161,7 @@ not how strong the match is (DECISIONS.md D-006); the judged queries, grades and
 
 ## Order of work from here
 
-1. M1: ISO dates, correct benches, a rebuild command, older judgments in the sample, then flip `stubs.search` once `smoke` passes.
+1. M1: ISO dates in the tokenised copy, correct benches (the last blocker for `stubs.search`), a rebuild command, older judgments in the sample, then flip `stubs.search` once `smoke` passes.
 2. M2: the extractor fixes, then commit the sample's `doc_statutes.jsonl` and flip `stubs.statute`.
 3. M3: evidence choice and the running-header regression, the gold set and the Gemini run, then build `doc_health.jsonl` and flip `stubs.health` and `stubs.authority`.
 4. M4: with real modules on, write the queries, pool, grade, tune on dev, report on test.

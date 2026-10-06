@@ -381,6 +381,20 @@ frame rate on the owner's machine (the pane throttles animation frames, so timin
   judgments, all 2025) cannot support the plan until M1 grows it (D-027); M2 and M3 still have their real functions off, so the evaluation runner
   refuses to produce results. The test-set table, the report PDF and the video follow those.
 
+### D-030 (2026-10-07) Third integration pass: M1's ISO dates, the 30 candidate queries, a robust pytest folder
+* **Branches.** `origin` fetched and every branch compared with `m4-rank`: only `m1-index` had a new commit (`287846e`, ISO dates in `judgments.jsonl`), merged
+  without conflict. `main`, `m2-statute` and `m3-treatment` are unchanged and already contained. Results of the re-run are in docs/INTEGRATION_REVIEW.md (update of
+  2026-10-07): the date finding is closed for `judgments.jsonl`, and `bench_size` 0 (27 records) is the only failure left when the real search and statute are on.
+* **The 30 candidate queries and their criteria** (added to the working tree by another coding assistant, declared in AI_USE_LOG.md and reviewed here for
+  consistency): five more candidates (`test16` to `test20`), `eval/examples/query_grade_criteria.example.md`, and the updated guide. They are inputs, not labels:
+  `eval/queries.jsonl` and `eval/qrels.tsv` stay empty until people adopt, verify and grade. `eval.feasibility` was re-run on them and confirms the guide's table
+  (3 answerable, 17 thin, 10 empty on the 200 judgments of 2025). **Risk to watch:** the criteria name the cases a judge should expect at each grade; a judge who grades
+  from those names without reading the judgment would turn an AI-written aid into the label, which rule 5 forbids. The guide already says every pair is graded after
+  reading the actual judgment. The workbench hides scores, ranks and system names but not the judgment itself, and two judges who copy the same aid would
+  agree with each other and raise kappa without reading anything, so agreement alone cannot detect it: use the criteria to settle disagreements, not to pre-assign grades.
+* **pytest folder.** A locked `.pytest_tmp` (a file watcher or editor holding it open on Windows) made every test error with `PermissionError` before it started. A
+  root `conftest.py` now falls back to a fresh folder for that run and removes stale ones; `.gitignore` covers `.pytest_tmp*`.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

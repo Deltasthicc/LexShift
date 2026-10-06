@@ -201,7 +201,7 @@ def test_results_carry_titles_when_the_corpus_has_them(eval_workspace, service):
 
 def test_examples_are_marked_as_suggestions(service):
     ex = service.examples()
-    assert ex["suggested"] is True and len(ex["queries"]) == 25 and {"qid", "text", "type"} <= set(ex["queries"][0])
+    assert ex["suggested"] is True and len(ex["queries"]) == 30 and {"qid", "text", "type"} <= set(ex["queries"][0])
 
 
 # ----------------------------------------------------------------------------------------------- evaluation

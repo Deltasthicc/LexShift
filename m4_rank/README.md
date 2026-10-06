@@ -12,7 +12,7 @@ stubs and the real modules replace them one by one.
 - [x] Ablation configs: **B0** BM25 only, **B1** + statute continuity, **full** (+ health + authority). `common/config.yaml`
 - [ ] **By hand, the team's job:** 30 queries (10 dev, 20 test), four types: **A** BNS query needing an IPC precedent, **B**
       changed or omitted provisions, **C** doctrines with overruled cases, **D** bare-number collisions. `eval/queries.jsonl`.
-      Ready for it: 25 example queries and the writing rules in [eval/JUDGING_GUIDE.md](../eval/JUDGING_GUIDE.md)
+      Ready for it: 30 candidate queries and the writing rules in [eval/JUDGING_GUIDE.md](../eval/JUDGING_GUIDE.md)
 - [x] Pooling tool: the top-20 of every system into a blind judge sheet, incrementally. `eval/pool.py`
 - [x] Two-judge qrels tooling: kappa, disagreements, adjudication, `qrels.tsv`. `eval/make_qrels.py`, `eval/agreement.py`,
       `eval/check_data.py`
