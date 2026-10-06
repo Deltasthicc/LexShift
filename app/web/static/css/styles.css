@@ -1,5 +1,17 @@
-/* LexShift interface. Offline: no web fonts, no remote images. Outfit is used when installed, with a system fallback.
-   Colours are tokens; the four ranking signals and the treatment statuses have one colour each everywhere. */
+/* LexShift interface. Offline: no web fonts from the network, no remote images. Outfit (SIL OFL 1.1) is bundled in ../fonts and GSAP in
+   ../vendor, both from their official npm packages (see vendor/README.md). Colours are tokens; the four ranking signals and the treatment
+   statuses have one colour each everywhere. */
+
+@font-face {
+  font-family: "Outfit"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("/static/fonts/outfit-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Outfit"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("/static/fonts/outfit-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   --font: "Outfit", "Geist", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -87,8 +99,7 @@
 
 /* ------------------------------------------------------------------ base */
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-html[data-motion="off"] { scroll-behavior: auto; }
+html { -webkit-text-size-adjust: 100%; } /* no CSS smooth scrolling: it fights ScrollTrigger; anchors scroll smoothly from JS */
 body {
   margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 1rem; line-height: 1.55;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden; width: 100%; max-width: 100%;
@@ -194,7 +205,7 @@ body.has-notice .hero { padding-top: clamp(10rem, 18vh, 13rem); }
 
 .hero-art {
   position: absolute; z-index: 1; right: clamp(-7rem, -4vw, -1rem); top: 50%; width: min(52vw, 700px); aspect-ratio: 1; margin-top: calc(min(52vw, 700px) / -2 + 2rem);
-  transform: scale(var(--s, 0.8)); opacity: var(--o, 1); filter: brightness(var(--b, 1)); will-change: transform, opacity; pointer-events: none;
+  will-change: transform, opacity; pointer-events: none;
 }
 .art-rings { width: 100%; height: 100%; overflow: visible; }
 .art-rings .ledger line { stroke: var(--text); stroke-opacity: 0.1; stroke-width: 1; }
@@ -390,12 +401,12 @@ details.fold > summary:hover { color: var(--text); }
 .stack-card {
   --stack-top: calc(var(--nav-top) + 5.6rem); position: sticky; top: calc(var(--stack-top) + var(--i, 0) * 1.1rem); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: center;
   min-height: min(26rem, 64vh); margin-bottom: clamp(3rem, 12vh, 7rem); padding: clamp(1.5rem, 4vw, 3.4rem); border-radius: calc(var(--radius) + 6px); border: 1px solid var(--line-soft);
-  background: linear-gradient(145deg, var(--bg-card), var(--bg-elev)); box-shadow: var(--shadow); transform-origin: 50% 0; transform: scale(var(--ss, 1)); filter: brightness(var(--sb, 1)); will-change: transform;
+  background: linear-gradient(145deg, var(--bg-card), var(--bg-elev)); box-shadow: var(--shadow); transform-origin: 50% 0; will-change: transform;
 }
 body.has-notice .stack-card { --stack-top: calc(var(--nav-top) + var(--notice-h, 38px) + 5.6rem); }
 .stack-copy h3 { font-size: clamp(1.7rem, 3.2vw, 2.9rem); letter-spacing: -0.035em; }
 .stack-copy p { margin-top: 1.1rem; color: var(--text-2); font-size: clamp(1rem, 1.3vw, 1.15rem); max-width: 34rem; }
-.stack-art { transform: scale(var(--s, 0.8)); opacity: var(--o, 1); filter: brightness(var(--b, 1)); will-change: transform, opacity; }
+.stack-art { will-change: transform, opacity; }
 .diagram { width: 100%; height: auto; overflow: visible; }
 .diagram .d-box { fill: var(--bg-input); stroke: var(--line); stroke-width: 1.5; } .diagram .d-box.d-on { stroke: var(--c-cont); fill: color-mix(in srgb, var(--c-cont) 12%, var(--bg-input)); }
 .diagram .d-text { fill: var(--text); font-family: var(--font); font-size: 22px; font-weight: 600; } .diagram .d-text.d-sm { font-size: 15px; }
@@ -534,9 +545,7 @@ body.has-notice .view-head { padding-top: clamp(9rem, 18vh, 12rem); }
 .save-state.is-error { color: var(--error); } .save-state.is-ok { color: var(--ok); }
 .kbd { font-family: var(--mono); font-size: 0.78rem; padding: 0.05rem 0.4rem; border-radius: 6px; border: 1px solid var(--line); color: var(--text-2); }
 
-.hero-art.is-settling { transition: transform 1.1s var(--ease), opacity 1.1s var(--ease); }
 .runs { display: grid; gap: 1.4rem; }
-html[data-motion="off"] .hero-art, html[data-motion="off"] .stack-art, html[data-motion="off"] .stack-card { transform: none; opacity: 1; filter: none; }
 
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 1080px) {
@@ -581,7 +590,6 @@ html[data-motion="off"] .hero-art, html[data-motion="off"] .stack-art, html[data
 
 /* ------------------------------------------------------------------ reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
   .reveal { opacity: 1; transform: none; }
   .hero-art, .stack-art, .stack-card { transform: none !important; opacity: 1 !important; filter: none !important; }

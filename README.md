@@ -157,8 +157,9 @@ LEXSHIFT_STUBS=none python -m app.server --open
 ```
 
 One page, offline, Python standard library only: no web font, script or image is fetched from the network (the page's
-Content-Security-Policy forbids it), and the server checks the `Host` header and binds to the loopback address. It is typeset in
-Outfit when that font is installed and in the system font otherwise; nothing is downloaded. Press `/` to focus the search box.
+Content-Security-Policy forbids it), and the server checks the `Host` header and binds to the loopback address. GSAP with ScrollTrigger
+(scroll motion) and the Outfit font are bundled in `app/web/static` from their official npm packages, with versions, licences and hashes in
+[app/web/static/vendor/README.md](app/web/static/vendor/README.md). Press `/` to focus the search box.
 
 | Screen | What it shows |
 |---|---|

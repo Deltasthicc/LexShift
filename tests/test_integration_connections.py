@@ -193,3 +193,31 @@ def test_the_real_chain_returns_real_hits_through_rank(m1, make_providers):
     assert len(results) == 5 and all(r.doc_id.startswith("2025_") for r in results)
     assert results[0].final == 1.0 and results[0].raw["rel"] > results[-1].raw["rel"] > 0
     assert json.dumps([r.to_dict() for r in results])  # serialisable end to end
+
+
+@pytest.mark.parametrize("module_name", ["m1_index.text_tokenizer", "m1_index.tokenizer"])
+def test_stopwords_still_load_when_nltk_rejects_a_redirected_path(module_name, monkeypatch):
+    """NLTK 3.9+ refuses a corpus file that resolves outside the folder it found, which is what a Windows packaged app's redirected
+    AppData looks like; M1's tokenizer then read nothing and the whole search failed to import. It reads the file directly instead."""
+    import importlib
+
+    nltk = pytest.importorskip("nltk")
+    try:
+        nltk.data.find("corpora/stopwords/english")
+    except LookupError:
+        pytest.skip("the NLTK stopwords corpus is not installed")
+    import nltk.corpus
+
+    class Rejecting:
+        @staticmethod
+        def words(_lang):
+            raise ValueError("Security Violation [CorpusReader]: path escapes root")
+
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(nltk.corpus, "stopwords", Rejecting())
+    try:
+        reloaded = importlib.reload(module)
+        assert "the" in reloaded.STOPWORDS and len(reloaded.STOPWORDS) > 100
+    finally:
+        monkeypatch.undo()
+        importlib.reload(module)

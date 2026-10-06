@@ -1,21 +1,20 @@
-// Scroll motion without a library: reveal-on-enter, image scale-and-fade, stacking cards, and the nav pill state.
+// Scroll motion with GSAP and ScrollTrigger (vendored in /static/vendor/gsap, loaded before this module; nothing is fetched).
 //
-// One requestAnimationFrame-throttled scroll handler writes CSS custom properties (--s scale, --o opacity, --b brightness) that
-// the stylesheet turns into transforms, so layout is never read and written in the same pass more than once per frame.
-// Everything is skipped when the visitor prefers reduced motion (html[data-motion="off"]).
+// Two paradigms, both scrubbed by the scroll position:
+//   image scale and fade   an image starts at 80% size, grows to full size as it enters, then darkens and fades to 20% as it leaves;
+//   card stacking          each principle card sits (CSS sticky) while the next one slides over it, and shrinks and dims underneath.
+// The hero art also settles from 80% to full size once on load. Reveal-on-enter stays an IntersectionObserver (CSS does the easing).
+//
+// Everything is created inside gsap.matchMedia(): visitors who prefer reduced motion get a static page, and an animation is reverted
+// automatically if that preference changes while the page is open. If the vendored files are missing the page still works, unanimated.
 
-const clamp = (x, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
-const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-const reducedQuery = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-
-let ticking = false;
+const gsap = window.gsap;
+const ScrollTrigger = window.ScrollTrigger;
+const available = Boolean(gsap && ScrollTrigger);
 let revealObserver = null;
+let refreshTimer = null;
 
-export const motionOn = () => document.documentElement.dataset.motion !== "off";
-
-function applyPreference() {
-  document.documentElement.dataset.motion = reducedQuery && reducedQuery.matches ? "off" : "on";
-}
+export const motionOn = () => available && document.documentElement.dataset.motion !== "off";
 
 export function observeReveals(root = document) {
   const targets = Array.from(root.querySelectorAll(".reveal:not(.is-in)"));
@@ -34,69 +33,79 @@ export function observeReveals(root = document) {
   });
 }
 
-function scaleFade(vh) {
-  for (const el of document.querySelectorAll("[data-scalefade]")) {
-    const r = el.getBoundingClientRect();
-    if (r.bottom < -vh || r.top > vh * 2) continue;
-    const enter = easeOut(clamp((vh - r.top) / (vh * 0.55)));
-    const leave = clamp(1 - (r.bottom - vh * 0.1) / (vh * 0.5));
-    el.style.setProperty("--s", (0.8 + 0.2 * enter).toFixed(3));
-    el.style.setProperty("--o", (1 - 0.8 * leave).toFixed(3));
-    el.style.setProperty("--b", (1 - 0.65 * leave).toFixed(3));
-  }
+/** Positions depend on layout (results appear, views switch, fonts load): ask ScrollTrigger to measure again, once per burst. */
+export function requestFrame() {
+  if (!available) return;
+  window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(() => ScrollTrigger.refresh(), 120);
 }
 
-function stacking() {
-  const cards = Array.from(document.querySelectorAll("[data-stack]"));
-  if (!cards.length) return;
-  const desktop = window.innerWidth > 900;
-  cards.forEach((card, i) => {
-    card.style.setProperty("--i", String(i));
-    if (!desktop) { card.style.removeProperty("--ss"); card.style.removeProperty("--sb"); return; }
-    const next = cards[i + 1];
-    let t = 0;
-    if (next) {
-      const r = card.getBoundingClientRect();
-      const stuckAt = parseFloat(getComputedStyle(card).top) || 0;
-      const nr = next.getBoundingClientRect();
-      t = clamp((stuckAt + r.height - nr.top) / Math.max(1, r.height - 18));
-    }
-    card.style.setProperty("--ss", (1 - 0.05 * t).toFixed(3));
-    card.style.setProperty("--sb", (1 - 0.42 * t).toFixed(3));
+function heroArt() {
+  const art = document.querySelector(".hero-art");
+  if (!art) return;
+  gsap.fromTo(art, { scale: 0.8, opacity: 0.35 }, { scale: 1, opacity: 1, duration: 1.3, ease: "power3.out" });
+  gsap.fromTo(art, { filter: "brightness(1)" }, {
+    filter: "brightness(0.35)", ease: "none", immediateRender: false,
+    scrollTrigger: { trigger: ".hero", start: "bottom 75%", end: "bottom top", scrub: true },
   });
 }
 
-function frame() {
-  ticking = false;
-  const wrap = document.getElementById("nav-wrap");
-  if (wrap) wrap.classList.toggle("is-scrolled", window.scrollY > 24);
-  if (!motionOn()) return;
-  const vh = window.innerHeight || 800;
-  scaleFade(vh);
-  stacking();
+function scaleAndFade() {
+  gsap.utils.toArray(".stack-art[data-scalefade]").forEach((el) => {
+    const tl = gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { trigger: el, start: "top bottom", end: "bottom top", scrub: true } });
+    tl.fromTo(el, { scale: 0.8 }, { scale: 1, duration: 0.4 })
+      .to(el, { scale: 1, duration: 0.2 })
+      .to(el, { opacity: 0.2, filter: "brightness(0.35)", duration: 0.4 });
+  });
 }
 
-export function requestFrame() {
-  if (!ticking) { ticking = true; window.requestAnimationFrame(frame); }
+function stackCards() {
+  const cards = gsap.utils.toArray("[data-stack]");
+  cards.forEach((card, i) => {
+    card.style.setProperty("--i", String(i));
+    const next = cards[i + 1];
+    if (!next) return;
+    // from the moment the next card's top reaches this card's bottom edge until it has covered it
+    const stuck = () => parseFloat(getComputedStyle(card).top) || 0;
+    gsap.to(card, {
+      scale: 0.95, filter: "brightness(0.58)", ease: "none",
+      scrollTrigger: {
+        trigger: next, scrub: true, invalidateOnRefresh: true,
+        start: () => `top ${stuck() + card.offsetHeight}px`,
+        end: () => `top ${stuck() + 18}px`,
+      },
+    });
+  });
 }
 
 export function initMotion() {
-  applyPreference();
-  if (reducedQuery && reducedQuery.addEventListener) {
-    reducedQuery.addEventListener("change", () => { applyPreference(); requestFrame(); });
+  const root = document.documentElement;
+  if (!available) {
+    root.dataset.motion = "off";
+    console.warn("GSAP is not loaded: /static/vendor/gsap is missing, so the page is shown without scroll motion.");
+    observeReveals();
+    return;
   }
-  window.addEventListener("scroll", requestFrame, { passive: true });
-  window.addEventListener("resize", requestFrame);
+  gsap.registerPlugin(ScrollTrigger);
+  ScrollTrigger.create({ start: 24, end: "max", toggleClass: { targets: "#nav-wrap", className: "is-scrolled" } });
+
+  const mm = gsap.matchMedia();
+  mm.add("(prefers-reduced-motion: no-preference)", () => {
+    root.dataset.motion = "on";
+    heroArt();
+    scaleAndFade();
+    const wide = gsap.matchMedia();
+    wide.add("(min-width: 901px)", () => { stackCards(); });
+    observeReveals();
+    return () => { wide.revert(); };
+  });
+  mm.add("(prefers-reduced-motion: reduce)", () => {
+    root.dataset.motion = "off";
+    observeReveals();
+  });
+
+  const settle = () => ScrollTrigger.refresh();
+  window.addEventListener("load", settle);
   window.addEventListener("lexshift:layout", requestFrame);
-  // the hero art starts small and settles to full size once; afterwards it follows the scroll without easing
-  const art = document.querySelector(".hero-art");
-  if (art && motionOn()) {
-    art.style.setProperty("--s", "0.8");
-    art.classList.add("is-settling");
-    window.setTimeout(() => { art.classList.remove("is-settling"); requestFrame(); }, 1100);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(requestFrame));
-  } else {
-    requestFrame();
-  }
-  observeReveals();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
 }

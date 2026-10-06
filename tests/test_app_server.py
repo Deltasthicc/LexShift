@@ -373,8 +373,9 @@ def test_the_server_binds_to_loopback_by_default(service):
 
 
 # ----------------------------------------------------------------------------------------------- the shipped page
-def _web_files(*suffixes):
-    return [p for p in WEB.rglob("*") if p.is_file() and p.suffix in suffixes]
+def _web_files(*suffixes, vendored=False):
+    """The page's own files; the vendored libraries (static/vendor) are checked separately, by hash, below."""
+    return [p for p in WEB.rglob("*") if p.is_file() and p.suffix in suffixes and (vendored or "vendor" not in p.relative_to(WEB).parts)]
 
 
 def test_the_page_never_uses_the_banned_wording():
@@ -420,3 +421,41 @@ def test_every_script_parses_when_node_is_available():
     for path in _web_files(".js"):
         result = subprocess.run([node, "--check", str(path)], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"{path.name}: {result.stderr.strip()[:300]}"
+
+
+def test_the_vendored_libraries_are_the_files_the_provenance_note_describes():
+    """GSAP and the Outfit font were copied unmodified from their npm packages; the note records each file's SHA-256."""
+    import hashlib
+
+    static = WEB / "static"
+    note = (static / "vendor" / "README.md").read_text(encoding="utf-8")
+    files = ["vendor/gsap/gsap.min.js", "vendor/gsap/ScrollTrigger.min.js", "fonts/outfit-latin-wght-normal.woff2",
+             "fonts/outfit-latin-ext-wght-normal.woff2"]
+    for rel in files:
+        path = static / rel
+        assert path.is_file(), f"{rel} is missing"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert digest in note, f"{rel} does not match the SHA-256 recorded in static/vendor/README.md (edited or replaced?)"
+    assert "SIL Open Font License" in (static / "fonts" / "OFL.txt").read_text(encoding="utf-8")
+    assert "GSAP 3." in (static / "vendor" / "gsap" / "gsap.min.js").read_text(encoding="utf-8")[:200]
+
+
+def test_the_vendored_scripts_do_not_touch_the_network():
+    for path in (WEB / "static" / "vendor" / "gsap").glob("*.js"):
+        text = path.read_text(encoding="utf-8")
+        for call in ("fetch(", "XMLHttpRequest", "importScripts", "sendBeacon", "WebSocket"):
+            assert call not in text, f"{path.name} contains {call}"
+
+
+def test_the_page_loads_gsap_before_its_own_code_and_declares_the_font():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    assert html.index("gsap.min.js") < html.index("ScrollTrigger.min.js") < html.index("/static/js/main.js")
+    css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert css.count("@font-face") == 2 and "/static/fonts/outfit-latin-wght-normal.woff2" in css and "font-src 'self'" in __import__("app.server", fromlist=["CSP"]).CSP
+
+
+def test_the_server_serves_the_vendored_files_with_the_right_types(live):
+    for path, ctype in (("/static/vendor/gsap/gsap.min.js", "text/javascript"), ("/static/vendor/gsap/ScrollTrigger.min.js", "text/javascript"),
+                        ("/static/fonts/outfit-latin-wght-normal.woff2", "font/woff2")):
+        status, resp, raw = live.request("GET", path)
+        assert status == 200 and resp.getheader("Content-Type").startswith(ctype) and len(raw) > 10_000, path

@@ -278,7 +278,9 @@ smallest edit that fixes a verified failure; owners may take them or replace the
   reads; no progress printing. `searcher.py`: `Hit` imported from `common.schema` instead of redefined; the engine is built on the first
   call instead of at import; a query with no operators is plain text (candidates are the documents containing any stemmed term, then BM25),
   so `BNS 103` and `3(5)` and `u/s` work; the year is read from `02 January 2025`-style dates and a missing year satisfies no year bound.
-  `tokenizer.py` and `text_tokenizer.py`: a clear message when the NLTK stop words are missing. `requirements.txt`: `nltk`.
+  `tokenizer.py` and `text_tokenizer.py`: a clear message when the NLTK stop words are missing, and the stop-word file is read directly when
+  NLTK 3.9+'s path-security check rejects it (Windows packaged apps redirect AppData, so the same file resolves to another folder and the whole
+  search failed to import; found when the interface was started from the desktop app's shell). `requirements.txt`: `nltk`.
 * M3 `resolver.py`: the dataset's language suffix is allowed in `doc_id` (`2025_1_1_11_EN`), the year is read from any date shape (`year_of`),
   and the coram reader accepts the recent mixed-case format with an author asterisk.
 * M2: no code changed. `stubs.statute` was set back to `true` (its file `doc_statutes.jsonl` is not committed, so smoke failed);
@@ -300,7 +302,7 @@ on `murder AND`); each turns into a pass when its owner fixes it.
   and the interface runs wherever the tests do. It binds to the loopback address, answers only to a loopback `Host` header (a web page
   you happen to have open cannot reach it), accepts writes only as JSON from its own origin, caps the body at 64 KB, and serves nothing
   outside `app/web/static`. The page's Content-Security-Policy allows no inline script or style and no other origin; the tests assert that
-  the shipped files contain no remote URL, no inline code and no `innerHTML`.
+  the page's own files contain no remote URL, no inline code and no `innerHTML` (the vendored libraries are checked by hash instead).
 * **No logic in the interface.** `app/service.py` calls `m4_rank` (`collect` once, then `fuse_collected` for B0, B1 and full), so the
   screen cannot disagree with `rank()`, and one request serves all three configurations: switching is instant. A stub signal is reported
   as a stub on every result, and when search is a stub every signal is (D-026).
@@ -309,11 +311,17 @@ on `murder AND`); each turns into a pass when its owner fixes it.
   is not ISO yet).
 * **Design brief.** The visual direction followed the `gpt-taste` skill (editorial split hero, 2-line headline, a gapless 4 by 2 bento,
   image scale-and-fade and card stacking, evidence carousel, marquee, inline pill in the headline, Outfit). Where the skill conflicts with the
-  project rules the rules won: no stock images (they are network fetches), so the artwork is generated SVG and CSS; no invented testimonials
-  or partners, so the carousel shows the treatment evidence of the current results and the marquee shows real judgment titles from the
-  index; and no GSAP, because vendoring it is a download and the demo must run offline, so the scroll motion is a small requestAnimationFrame
-  handler (`motion.js`) that writes CSS variables, switched off for visitors who prefer reduced motion. Outfit is used when installed and
-  the system font otherwise; bundling the font file and GSAP needs the owner's permission to download them.
+  project rules the rules won: no stock images (they are network fetches), so the artwork is generated SVG and CSS; and no invented
+  testimonials or partners, so the carousel shows the treatment evidence of the current results and the marquee shows real judgment titles
+  from the index.
+* **Vendored GSAP and Outfit.** At the owner's request GSAP 3.15.0 (with ScrollTrigger) and the Outfit variable font 5.3.0 were downloaded
+  once with `npm pack` from their official packages and copied unmodified into `app/web/static/vendor` and `app/web/static/fonts`. The run
+  time still fetches nothing: the files are served by the local server, the CSP allows `script-src` and `font-src` from the same origin only,
+  and a test checks each file against the SHA-256 recorded in `app/web/static/vendor/README.md`, that the GSAP files contain no network call,
+  and that both libraries are served. GSAP's "no charge" licence is stated in the file headers (https://gsap.com/standard-license); Outfit is
+  SIL OFL 1.1. The motion is created inside `gsap.matchMedia()`, so visitors who prefer reduced motion get a static page, and if the vendored
+  files are missing the page still works unanimated. CSS `scroll-behavior: smooth` was removed because it fights ScrollTrigger; anchors scroll
+  smoothly from script instead.
 * **Judging workbench.** It writes only `judge1.csv` or `judge2.csv` in a round's folder, through the same atomic table writer as the
   tools, refuses to touch a file that no longer matches the template, neutralises spreadsheet formulas in notes, and reads only
   `sheet_template.csv`: never `provenance.csv`, scores, ranks or the other judge's file. It does not compute or show agreement (that would
