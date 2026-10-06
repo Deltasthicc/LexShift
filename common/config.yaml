@@ -1,0 +1,70 @@
+# LexShift shared configuration: the one place for paths, stub switches and weights.
+# One section per owner so merges stay clean. Values marked "placeholder" are untuned starting points,
+# never results: weights are tuned on DEV queries only (eval/run_ablation.py --tune) and reported on TEST.
+
+paths:                              # relative to the repository root
+  raw: data/raw                     # AWS download, git-ignored
+  processed: data/processed
+  judgments: data/processed/judgments.jsonl        # M1
+  doc_statutes: data/processed/doc_statutes.jsonl  # M2
+  citations: data/processed/citations.jsonl        # M3
+  doc_health: data/processed/doc_health.jsonl      # M3
+  doc_meta: data/processed/doc_meta.jsonl          # optional, derived (title/date/bench) for the demo
+  index_dir: data/processed/index                  # M1
+  statute_map: data/statute_map.csv                # M2
+  treatment_gold: data/treatment_gold.csv          # M3
+  queries: eval/queries.jsonl                      # M4, hand-written
+  qrels: eval/qrels.tsv                            # M4, hand-judged
+  gold_overrulings: eval/gold_overrulings.csv      # M4, hand-verified, used only for harmful@k
+  results_dir: eval/results
+
+# Stub switches. true  = use the fixed-value stub in stubs/fixed.py (the signal is NOT real).
+#                false = call the real module. Flip a switch in the same commit that makes the real
+#                function pass `python eval/smoke.py`. Override per run with LEXSHIFT_STUBS=none|all|search,health
+stubs:
+  search: true       # M1  m1_index.search
+  statute: true      # M2  m2_statute.parse_query + continuity
+  health: true       # M3  m3_treatment.health
+  authority: true    # M3  m3_treatment.authority
+
+m1_index:
+  bm25: {k1: 1.2, b: 0.75}          # textbook defaults, M1 may tune
+
+m2_statute:
+  bns_commencement: "2024-07-01"    # offence on/after this date -> BNS/BNSS, before -> IPC/CrPC
+  relation_weights:                 # Guide section 5, M2 block; M4 may tune on DEV
+    equivalent: 1.0
+    modified_punishment: 0.9
+    modified_elements: 0.5
+    split: 0.7                      # per part
+    merged: 0.7                     # per part
+    omitted: 0.1
+    new: 0.0
+
+m3_treatment:
+  health_values:                    # Guide section 5, M3 block: strongest VALID negative treatment wins
+    overruled: 0.1
+    doubted: 0.6                    # doubted / criticised
+    default: 1.0
+  pagerank: {damping: 0.85}         # textbook default, M3 may tune
+
+ranking:                            # owner: M4
+  candidates: 100                   # top-N taken from search() before re-ranking
+  max_evidence: 3                   # evidence sentences kept per result
+  use_tuned: true                   # overlay common/weights_tuned.yaml when it exists
+  tuned_file: common/weights_tuned.yaml
+  normalize:                        # per-signal normaliser: minmax (over the candidate set) | identity (clip to [0,1])
+    rel: minmax                     # BM25 is unbounded and query dependent
+    cont: identity                  # already a calibrated weight in [0, 1]; see DECISIONS.md D-006
+    health: identity                # already calibrated (overruled 0.1, doubted 0.6, else 1.0)
+    auth: minmax                    # PageRank mass is only meaningful relative to the candidates
+  configs:                          # ablation systems; weights are renormalised to sum to 1 at load time
+    b0:   {rel: 1.0}                                                  # BM25 only
+    b1:   {rel: 0.7, cont: 0.3}                                       # + statutory continuity (placeholder)
+    full: {rel: 0.5, cont: 0.2, health: 0.2, auth: 0.1}               # + health + authority (placeholder)
+
+evaluation:                         # owner: M4
+  depth: 20                         # evaluate the top-20: the qrels pool is the union of the top-20 of every system
+  relevant_threshold: 1             # grade >= 1 counts as relevant for P@k, R@k and MAP
+  gain: exp                         # nDCG gain: exp = 2**grade - 1, linear = grade
+  seed: 0
