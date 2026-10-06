@@ -19,7 +19,7 @@ import yaml
 
 from common.config import load_config
 from common.schema import Query
-from eval.metrics import aggregate, evaluate_query
+from eval.metrics import OBJECTIVES, aggregate, evaluate_query
 from m4_rank.rank import Collected, fuse_collected
 from m4_rank.weights import SIGNALS, active_signals, canonical_config, normalise_weights, tuned_path
 
@@ -87,6 +87,8 @@ def tune_config(
 ) -> TuningResult:
     """Grid-search the weights of `config` on `queries` (which must all be dev queries)."""
     cfg = cfg or load_config()
+    if objective not in OBJECTIVES:
+        raise TuningError(f"objective must be a higher-is-better ranking metric, one of {OBJECTIVES}; got {objective!r}")
     not_dev = [q.qid for q in queries if q.split != "dev"]
     if not_dev:
         raise TuningError(f"refusing to tune on non-dev queries: {not_dev[:5]}. Tuning uses the dev split only.")

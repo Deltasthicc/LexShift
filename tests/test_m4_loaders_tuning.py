@@ -111,6 +111,32 @@ def test_a_flat_objective_falls_back_to_the_starting_weights(make_providers):
     assert res.best.weights == pytest.approx(start)
 
 
+@pytest.mark.parametrize("objective", ["harmful@10", "judged@10", "recall", ""])
+def test_only_higher_is_better_ranking_metrics_can_be_tuning_objectives(make_providers, objective):
+    # harmful@10 is lower-is-better, judged@10 measures the pool: optimising either would be silently wrong
+    p = make_providers()
+    collected = {"q1": collect("murder", None, SIGNALS, providers=p)}
+    with pytest.raises(TuningError, match="higher-is-better"):
+        tune_config("full", collected, [dev_query()], {"q1": {"A": 2}}, {"A"}, objective=objective)
+
+
+def test_every_valid_objective_is_accepted(make_providers):
+    from eval.metrics import OBJECTIVES
+
+    p = make_providers()
+    collected = {"q1": collect("murder", None, SIGNALS, providers=p)}
+    for objective in OBJECTIVES:
+        res = tune_config("b1", collected, [dev_query()], {"q1": {"A": 0, "B": 2, "D": 1}}, None, objective=objective)
+        assert res.objective == objective
+
+
+def test_the_command_line_rejects_a_non_objective():
+    import eval.run_ablation as run_ablation
+
+    with pytest.raises(SystemExit):
+        run_ablation.parse_args(["--objective", "harmful@10"])
+
+
 def test_tuning_refuses_test_queries_and_untunable_configs(make_providers):
     p = make_providers()
     collected = {"t1": collect("q", None, SIGNALS, providers=p)}

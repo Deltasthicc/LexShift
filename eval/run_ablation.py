@@ -26,7 +26,7 @@ from common.io import write_delimited  # noqa: E402
 from common.providers import SIGNAL_GROUP, Providers, load_providers  # noqa: E402
 from common.schema import Query  # noqa: E402
 from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries  # noqa: E402
-from eval.metrics import METRIC_NAMES, aggregate, evaluate_query, paired_bootstrap  # noqa: E402
+from eval.metrics import METRIC_NAMES, OBJECTIVES, aggregate, evaluate_query, paired_bootstrap  # noqa: E402
 from eval.tuning import TuningError, save_tuned, tune_config  # noqa: E402
 from m4_rank.rank import Collected, collect, fuse_collected  # noqa: E402
 from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights, weights_source  # noqa: E402
@@ -39,7 +39,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--split", choices=("dev", "test"), help="split to report (default: test, or dev with --tune)")
     ap.add_argument("--configs", default=DEFAULT_CONFIGS, help=f"comma list (default {DEFAULT_CONFIGS})")
     ap.add_argument("--tune", action="store_true", help="tune weights on the DEV split first")
-    ap.add_argument("--objective", default="nDCG@10", choices=METRIC_NAMES, help="tuning objective (default nDCG@10)")
+    ap.add_argument("--objective", default="nDCG@10", choices=OBJECTIVES, help="tuning objective, higher is better (default nDCG@10)")
     ap.add_argument("--step", type=float, default=0.1, help="weight grid step (default 0.1)")
     ap.add_argument("--min-rel", type=float, default=0.3, help="floor on the relevance weight while tuning (default 0.3)")
     ap.add_argument("--allow-stubs", action="store_true", help="run with stub providers; output is named stub_* and is not a result")

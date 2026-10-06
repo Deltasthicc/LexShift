@@ -101,6 +101,9 @@ def evaluate_query(
 
 
 METRIC_NAMES = ("P@5", "P@10", "R@10", "MAP", "nDCG@10", "harmful@10", "judged@10")
+# Metrics where higher is better and that measure ranking quality: the only valid tuning objectives. harmful@10 is
+# lower-is-better and judged@10 measures the pool, not the ranking, so neither may be optimised.
+OBJECTIVES = ("nDCG@10", "MAP", "P@5", "P@10", "R@10")
 
 
 def aggregate(per_query: Mapping[str, Mapping[str, float | None]]) -> dict[str, tuple[float | None, int]]:

@@ -100,6 +100,49 @@ def test_tuned_weights_overlay_only_when_enabled(tmp_path, write_config, monkeyp
     assert load_weights("full", load_config())["health"] == pytest.approx(0.2)
 
 
+def mutated(section, key, value):
+    """A copy of the config whose ranking/evaluation section has one value replaced (None deletes the key)."""
+    import copy
+
+    cfg = copy.deepcopy(load_config())
+    if value is None:
+        del cfg[section][key]
+    else:
+        cfg[section][key] = value
+    return cfg
+
+
+@pytest.mark.parametrize(
+    "section,key,value,message",
+    [
+        ("ranking", "normalize", {"rel": "minmax", "cont": "identity", "health": "identity"}, "exactly"),
+        ("ranking", "normalize", {"rel": "minmaxx", "cont": "identity", "health": "identity", "auth": "minmax"}, "must be one of"),
+        ("ranking", "configs", {"b0": {"rel": 1.0}, "b1": {"rel": 1.0, "cont": 1.0}}, "full is missing"),
+        ("ranking", "configs", {"b0": {"rel": 1.0}, "b1": {"rel": -1.0}, "full": {"rel": 1.0}}, ">= 0"),
+        ("ranking", "candidates", 5, "candidates must be >= evaluation.depth"),
+        ("ranking", "max_evidence", None, "max_evidence is missing"),
+        ("evaluation", "depth", 9, "depth must be >= 10"),
+        ("evaluation", "relevant_threshold", 3, "relevant_threshold"),
+        ("evaluation", "gain", "log", "gain"),
+        ("evaluation", "seed", None, "seed is missing"),
+    ],
+)
+def test_ranking_and_evaluation_config_errors_are_clear(section, key, value, message):
+    from m4_rank.weights import validate_ranking_config
+
+    cfg = mutated(section, key, value)
+    with pytest.raises(WeightsError, match=message):
+        validate_ranking_config(cfg)
+    with pytest.raises(WeightsError):
+        load_weights("full", cfg)  # every ranking call validates first
+
+
+def test_shipped_ranking_and_evaluation_config_is_valid():
+    from m4_rank.weights import validate_ranking_config
+
+    validate_ranking_config(load_config())
+
+
 def test_missing_tuned_file_is_not_an_error(tmp_path, write_config, monkeypatch):
     path = write_config(tmp_path / "config.yaml", {"ranking": {"use_tuned": True, "tuned_file": str(tmp_path / "none.yaml")}})
     monkeypatch.setenv("LEXSHIFT_CONFIG", str(path))
