@@ -1,0 +1,21 @@
+name: ci
+
+on:
+  push:
+    branches: [main, m1-index, m2-statute, m3-treatment, m4-rank]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m pytest
+      - name: Smoke test (contracts and end-to-end; stubs unless a module has flipped its switch)
+        run: python eval/smoke.py
