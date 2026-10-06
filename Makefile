@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data docmeta download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance docmeta download build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -14,6 +14,7 @@ help:
 	@echo "pool             build the blind judge sheet: make pool ROUND=round1"
 	@echo "qrels            reconcile the two judges into eval/qrels.tsv: make qrels ROUND=round1"
 	@echo "check-data       check the hand-made queries, qrels and gold list against the plan"
+	@echo "conformance      check M1, M2 and M3 artefacts and functions against the shared contracts"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
 	@echo "download         M1: fetch the AWS Open Data judgments"
 	@echo "build-index      M1: judgments.jsonl and the search index"
@@ -49,6 +50,9 @@ qrels:
 
 check-data:
 	$(PY) -m eval.check_data
+
+conformance:
+	$(PY) -m eval.conformance
 
 docmeta:
 	$(PY) -m app.docmeta

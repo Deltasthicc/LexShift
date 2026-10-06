@@ -24,8 +24,8 @@ from app.docmeta import describe, load_doc_meta  # noqa: E402
 from common.config import load_config  # noqa: E402
 from common.providers import Providers, load_providers  # noqa: E402
 from common.schema import Result  # noqa: E402
-from m4_rank.explain import split_explanation  # noqa: E402
-from m4_rank.rank import ArtefactError, ContractViolation, rank  # noqa: E402
+from m4_rank.explain import split_explanation, strip_controls  # noqa: E402
+from m4_rank.rank import ArtefactError, ContractViolation, load_checked, rank  # noqa: E402
 from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights, weights_source  # noqa: E402
 
 BAR_WIDTH = 20
@@ -59,7 +59,7 @@ def render_evidence(ev: dict, width: int = 108, limit: int | None = None) -> lis
     if ev.get("citing_bench"):
         extras.append(f"{ev['citing_bench']}-judge bench")
     head = f"      evidence: {ev['label']} in {ev['citing_doc']}" + (f" ({', '.join(extras)})" if extras else "")
-    text = " ".join(str(ev["sentence"]).split())
+    text = " ".join(strip_controls(ev["sentence"]).split())
     if limit is not None and len(text) > limit:
         text = textwrap.shorten(text, width=limit, placeholder=" ...")
     body = textwrap.wrap(f'"{text}"', width=width, initial_indent="        ", subsequent_indent="        ")
@@ -93,6 +93,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                     "(default: show it in full; it is the evidence)")
     ap.add_argument("--verbose", action="store_true", help="also show the query parse, weights and raw signals")
     ap.add_argument("--json", action="store_true", help="print results as JSON on stdout")
+    ap.add_argument("--debug", action="store_true", help="show the full traceback of an unexpected error in a module")
     return ap.parse_args(argv)
 
 
@@ -117,7 +118,7 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
     cfg = load_config()
     try:
         config = canonical_config(args.config, cfg)
-        providers = providers or load_providers(cfg)
+        providers = providers or load_checked(load_providers, cfg)
         weights = load_weights(config, cfg)
         results = rank(args.query, args.offence_date, k=args.k, config=config, providers=providers)
     except NotImplementedError as exc:
@@ -133,6 +134,12 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
     except ValueError as exc:
         print(f"Invalid input: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # noqa: BLE001 - a bug in any module should read as one clear line, with the traceback on request
+        if getattr(args, "debug", False):
+            raise
+        print(f"Unexpected error in a module ({type(exc).__name__}): {exc}\n"
+              "This is a bug in the code, not in your query. Re-run with --debug to see the traceback.", file=sys.stderr)
+        return 3
 
     used = [s for s in SIGNALS if s in active_signals(weights)]
     stubbed = providers.stubbed_signals(used)

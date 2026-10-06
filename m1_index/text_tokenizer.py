@@ -8,7 +8,12 @@ from nltk.stem import PorterStemmer
 # Resources
 # =========================================================
 
-STOPWORDS = set(stopwords.words("english"))
+try:
+    STOPWORDS = set(stopwords.words("english"))
+except LookupError as exc:
+    raise RuntimeError(
+        "The NLTK stopwords corpus is not installed. Run once (needs the network): python -m nltk.downloader stopwords"
+    ) from exc
 STEMMER = PorterStemmer()
 
 

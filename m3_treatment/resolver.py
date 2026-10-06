@@ -26,7 +26,16 @@ from typing import Iterable
 from m3_treatment.citations import Cite, cite_key, find_cites, find_case_names
 from m3_treatment.text import jaccard, party_tokens
 
-_PATH_ID = re.compile(r"^(?P<y>\d{4})_(?P<v>\d+)_(?P<a>\d+)_(?P<b>\d+)$")
+# The dataset's file stem is "<year>_<volume>_<first page>_<last page>_<language>" (for example 2025_1_1_11_EN); M1 keeps the
+# whole stem as doc_id, so an optional language suffix is allowed.
+_PATH_ID = re.compile(r"^(?P<y>\d{4})_(?P<v>\d+)_(?P<a>\d+)_(?P<b>\d+)(?:_[A-Za-z]{2,3})?$")
+_YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
+
+
+def year_of(date: str | None) -> int | None:
+    """The year in a date string of any common shape: 2025-01-02, 02 January 2025, 11-12-2013 (None if there is none)."""
+    m = _YEAR.search(date or "")
+    return int(m.group(1)) if m else None
 DEFAULTS = {
     "name_threshold": 0.5,  # Jaccard needed when the citation year is known
     "name_threshold_no_year": 0.75,  # stricter when it is not (name-only mentions)
@@ -56,18 +65,25 @@ class Resolution:
 # The coram line printed under the title in the Supreme Court Reports:
 #   "[MADAN B. LOKUR, S. ABDUL NAZEER AND DEEPAK GUPTA, JJ.]", "[DIPAK MISRA, CJI, R.F. NARIMAN ... AND INDU MALHOTRA, JJ.]"
 _CORAM = re.compile(r"\[([^\[\]]{3,500}?),?\s*(?:JJ|J|CJI)\.?\s*\]")
-_CORAM_SPLIT = re.compile(r",|\bAND\b")
+_CORAM_SPLIT = re.compile(r",|\band\b", re.IGNORECASE)
 CORAM_HEAD_CHARS = 6000
 
 
+_AUTHORSHIP_NOTE = re.compile(r"\b(?:for|on\s+behalf\s+of)\s+(?:himself|herself|self|myself|the\s+bench|the\s+court)\b", re.IGNORECASE)
+
+
 def bench_from_text(text: str) -> int | None:
-    """Number of judges on the coram line near the top of the judgment ("CJI" is a title, not another judge)."""
+    """Number of judges on the coram line near the top of the judgment ("CJI" is a title, not another judge).
+
+    Two printed shapes exist: the older all-capitals "[DIPAK MISRA, CJI, R.F. NARIMAN ... AND INDU MALHOTRA, JJ.]" and the
+    recent mixed-case "[C.T. Ravikumar* and Sanjay Kumar, JJ.]" (an asterisk marks the author).
+    """
     best = None
     for m in _CORAM.finditer(re.sub(r"\s+", " ", text[:CORAM_HEAD_CHARS])):
-        body = m.group(1)
-        if any(ch.islower() for ch in body):
+        body = m.group(1).replace("*", "")
+        if _AUTHORSHIP_NOTE.search(body):
             continue  # "[for himself and Khanwilkar, J.]" is an authorship note, not the coram
-        names = [n.strip() for n in _CORAM_SPLIT.split(re.sub(r"\bCJI\b", "", body)) if re.search(r"[A-Z]{2}", n)]
+        names = [n.strip() for n in _CORAM_SPLIT.split(re.sub(r"\bCJI\b", "", body)) if re.search(r"[A-Za-z]{2}", n)]
         if names and (best is None or len(names) > best):
             best = len(names)
     return best
@@ -103,7 +119,7 @@ class CorpusIndex:
         titles: dict[str, set[str]] = {}
         for rec in judgments:
             doc_id = rec["doc_id"]
-            year = int(rec["date"][:4]) if rec.get("date") else None
+            year = year_of(rec.get("date"))
             self.meta[doc_id] = DocMeta(doc_id, rec.get("title", ""), year, bench_of(rec))
             for raw in rec.get("reporter_citations") or []:
                 for c in find_cites(raw):

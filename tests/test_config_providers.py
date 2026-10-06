@@ -58,12 +58,26 @@ def test_env_override_rejects_unknown_group(monkeypatch):
 
 
 def test_real_providers_are_not_silently_replaced_by_stubs(monkeypatch):
-    # With every switch off, the providers are the (unimplemented) real functions, not stubs.
+    # With every switch off, the providers are the real modules' functions, never the stubs. Fake module objects stand in for
+    # M1-M3 so the test neither loads their indexes nor depends on how far each module has got.
+    import sys
+    import types
+
+    marker = lambda *a, **k: "real"  # noqa: E731
+    fakes = {
+        "m1_index": {"search": marker},
+        "m2_statute": {"parse_query": marker, "continuity": marker},
+        "m3_treatment": {"health": marker, "authority": marker},
+    }
+    for name, attrs in fakes.items():
+        monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**attrs))
     monkeypatch.setenv(ENV_VAR, "none")
     p = load_providers()
     assert p.stubbed == frozenset()
-    with pytest.raises(NotImplementedError):
-        p.search("murder")
+    assert all(fn is marker for fn in (p.search, p.parse_query, p.continuity, p.health, p.authority))
+    import stubs
+
+    assert p.search is not stubs.search and p.health is not stubs.health
 
 
 def test_stub_providers_report_what_is_stubbed():

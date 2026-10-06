@@ -23,7 +23,7 @@ paths:                              # relative to the repository root
 #                function pass `python eval/smoke.py`. Override per run with LEXSHIFT_STUBS=none|all|search,health
 stubs:
   search: true       # M1  m1_index.search
-  statute: false      # M2  m2_statute.parse_query + continuity
+  statute: true       # M2  m2_statute.parse_query + continuity (back to true: doc_statutes.jsonl is not committed, so the smoke gate failed; flip it in the commit that adds the sample's doc_statutes.jsonl)
   health: true       # M3  m3_treatment.health
   authority: true    # M3  m3_treatment.authority
 

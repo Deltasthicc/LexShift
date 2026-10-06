@@ -11,10 +11,10 @@ Items marked **proposed** were not fixed by the Guide; they are v0.1 proposals (
 
 | Thing | Rule |
 |---|---|
-| `doc_id` | The dataset's own case identifier, fixed in hour 0 by M1 |
+| `doc_id` | The dataset's own case identifier, fixed in hour 0 by M1. In practice the dataset's file stem, `<year>_<volume>_<first page>_<last page>_<language>` (for example `2025_1_1_11_EN`); M3's resolver reads the year, volume and pages from it |
 | `offence_id` | `OFF_<NAME>`, for example `OFF_MURDER` |
 | Act codes | `IPC`, `BNS`, `CRPC`, `BNSS` (plus `UNKNOWN` for a bare section that could not be resolved) |
-| Dates | ISO strings, `YYYY-MM-DD`. BNS/BNSS apply to offences on or after 2024-07-01 |
+| Dates | ISO strings, `YYYY-MM-DD` in every file (not `02 January 2025`). BNS/BNSS apply to offences on or after 2024-07-01 |
 | Files | UTF-8, LF line endings. JSON Lines for records, CSV/TSV for tables |
 | Stubs first | Hours 0-3: every owner's functions exist as fixed-value stubs. Later only the body changes, never the signature |
 | Python | 3.11. One shared `requirements.txt`; add a library there before importing it |

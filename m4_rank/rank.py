@@ -13,14 +13,16 @@ silently corrupting a ranking.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
+import sys
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 from common import contracts
 from common.config import load_config
 from common.providers import SIGNAL_GROUP, Providers, load_providers
-from common.schema import QueryStatutes, Result
+from common.schema import Hit, QueryStatutes, Result
 from m4_rank.fusion import SignalRow, fuse
 from m4_rank.weights import SIGNALS, active_signals, load_weights
 
@@ -34,6 +36,35 @@ class ArtefactError(RuntimeError):
 
     Typically the index and `doc_health.jsonl` were built from different corpus versions, or a build step was not run.
     """
+
+
+def load_checked(loader, cfg: dict[str, Any] | None = None) -> Providers:
+    """Run `loader` (normally common.providers.load_providers) and make its failures readable.
+
+    A real module that cannot even be imported (a missing library or data file read at import time) becomes an ArtefactError,
+    and whatever a module prints while loading goes to stderr, so machine-readable stdout (--json) stays clean.
+    """
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            return loader(cfg)
+    except (ImportError, LookupError, OSError, RuntimeError) as exc:
+        raise ArtefactError(f"could not load a real module: {type(exc).__name__}: {exc}") from exc
+
+
+def as_hit(obj: Any) -> Any:
+    """A search result as common.schema.Hit. Strict about content, tolerant about the class that carries it.
+
+    M1 defines its own Hit class with the same three fields; accepting any object that has doc_id, rel and zone_scores keeps
+    the pipeline working, and the content is still checked by the contract. Anything else is returned unchanged so the
+    contract check reports it.
+    """
+    if isinstance(obj, Hit):
+        return obj
+    if isinstance(obj, dict) and "doc_id" in obj and "rel" in obj:
+        return Hit(doc_id=obj["doc_id"], rel=obj["rel"], zone_scores=dict(obj.get("zone_scores") or {}))
+    if hasattr(obj, "doc_id") and hasattr(obj, "rel"):
+        return Hit(doc_id=obj.doc_id, rel=obj.rel, zone_scores=dict(getattr(obj, "zone_scores", None) or {}))
+    return obj
 
 
 def _call(where: str, fn, *args):
@@ -93,6 +124,8 @@ def collect(
     wanted = tuple(s for s in SIGNALS if s == "rel" or s in signals)
 
     hits = _call("search()", providers.search, query, n)
+    if isinstance(hits, list):
+        hits = [as_hit(h) for h in hits]
     _enforce(contracts.check_hits(hits, n), "search()")
     rows = [SignalRow(doc_id=h.doc_id, raw={"rel": float(h.rel)}) for h in hits]
 
@@ -114,7 +147,12 @@ def collect(
             _enforce(contracts.check_authority(value), f"authority({row.doc_id})")
             row.raw["auth"] = float(value)
 
-    return Collected(query, offence_date, wanted, rows, tuple(providers.stubbed_signals(wanted)))
+    stubbed = tuple(providers.stubbed_signals(wanted))
+    if "rel" in stubbed:
+        # The candidates are placeholders, so a "real" statute or treatment module was only asked about ids it has never
+        # seen: nothing computed on them is a result, whatever that module is.
+        stubbed = wanted
+    return Collected(query, offence_date, wanted, rows, stubbed)
 
 
 def fuse_collected(

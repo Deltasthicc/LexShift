@@ -110,6 +110,7 @@ Linux), then:
 
 ```bash
 pip install -r requirements.txt
+python -m nltk.downloader stopwords   # once; M1's tokenizer reads this list
 python -m pytest            # unit tests
 python eval/smoke.py        # contract + end-to-end check; the merge gate for main
 ```
@@ -140,6 +141,7 @@ such as `search,health`.
 | `make pool ROUND=round1` | `python -m eval.pool --round round1` | M4 |
 | `make qrels ROUND=round1` | `python -m eval.make_qrels --round round1` | M4 |
 | `make check-data` | `python -m eval.check_data` | M4 |
+| `make conformance` | `python -m eval.conformance` | all |
 
 The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
 
@@ -179,6 +181,18 @@ query: BNS 103 murder
 If `data/processed/doc_meta.jsonl` exists (`python -m app.docmeta` derives it from `judgments.jsonl`), case titles, dates and
 bench sizes are shown next to each id.
 
+## Checking that the modules fit together
+
+```bash
+python -m pytest                      # unit, connection and randomised robustness tests (M1 to M4)
+python eval/smoke.py                  # the merge gate: contracts and an end-to-end rank() with the providers selected in config.yaml
+python -m eval.conformance            # real artefacts and real functions of M1, M2 and M3 against the shared contracts, per module
+```
+
+`eval.conformance` is the one to send to an owner: it names what breaks which contract and who has to act, and it exits 1 on a
+failure. The full per-module findings from the first run on real judgments are in
+[docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md).
+
 ## Data
 
 Primary corpus: the **Indian Supreme Court Judgments** dataset on AWS Open Data
@@ -210,15 +224,15 @@ a test query), and with no queries or judgements it says so instead of printing 
 
 ## Status
 
-*Last updated 2026-10-06 (M3 merged into `m4-rank`, checked against M4). This table is the honest state of the project; each
-owner updates their row when they merge.*
+*Last updated 2026-10-06 (M1, M2 and M3 merged into `m4-rank` and run together on real judgments: [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md)).
+This table is the honest state of the project; each owner updates their row when they merge.*
 
 | Module | State on `main` |
 |---|---|
 | Shared contracts, config, stubs, smoke test | **Done**, with unit tests |
-| M1 corpus, index and `search()` | Skeleton and spec only; served by a stub |
-| M2 statute layer | Skeleton and spec only; served by a stub; `statute_map.csv` is header-only |
-| M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), including an end-to-end run on a synthetic corpus checked against M4's `rank()` and demo. **Not yet run on the corpus** (it needs M1's `judgments.jsonl`): no `citations.jsonl` or `doc_health.jsonl`, no gold set, no Gemini labels, no F1 table; so `stubs.health` and `stubs.authority` stay `true` |
+| M1 corpus, index and `search()` | **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked. **Not done:** the corpus cannot be rebuilt (`ingest.py` and `index.py` are skeletons), `judgments.jsonl` breaks the `Judgment` contract (non-ISO dates, wrong bench sizes), no tests; so `stubs.search` stays `true`. Needs older judgments in the sample |
+| M2 statute layer | **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
+| M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), run end to end on 203 real judgments (a stand-in labeller, since there are no Gemini labels or gold set yet) and checked against M4's `rank()` and demo: Koushal comes out overruled by the 5-judge Navtej bench. **Not done:** the real labelling run, the gold set, the F1 table, a built `doc_health.jsonl` for the corpus; so `stubs.health` and `stubs.authority` stay `true` |
 | M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker and the CLI demo are implemented and unit-tested against fixtures and the stubs; report skeleton, video script and submission checklist are drafted (branch `m4-rank`; skeleton only on `main` until it is merged) |
 | Judged queries and qrels | **Not written yet: they are made by hand.** Example queries, rules and tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)) |
 

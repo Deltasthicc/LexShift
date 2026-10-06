@@ -39,7 +39,10 @@ from common.schema import Query  # noqa: E402
 from eval.loaders import (  # noqa: E402
     EvalDataError, judging_root, load_qrels, load_queries, valid_round_name, write_table,
 )
-from m4_rank.rank import ArtefactError, Collected, ContractViolation, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.explain import strip_controls  # noqa: E402
+from m4_rank.rank import (  # noqa: E402
+    ArtefactError, Collected, ContractViolation, collect, fuse_collected, load_checked, stubbed_groups,
+)
 from m4_rank.weights import canonical_config, format_weights, load_weights, signals_used  # noqa: E402
 
 SHEET_COLUMNS = ("qid", "query", "type", "offence_date", "doc_id", "title", "date", "bench_size", "excerpt", "grade", "note")
@@ -90,7 +93,7 @@ def overlap_stats(docs: Mapping[str, Mapping[str, int]], configs: Sequence[str])
 
 
 def _tidy(text: str, limit: int) -> str:
-    text = re.sub(r"\s+", " ", text or "").strip()
+    text = re.sub(r"\s+", " ", strip_controls(text or "")).strip()
     return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
 
@@ -101,6 +104,7 @@ def safe_cell(text: Any) -> str:
     with those characters and would otherwise be evaluated or mangled, and re-saved that way.
     """
     s = "" if text is None else str(text)
+    s = strip_controls(s)
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
@@ -244,7 +248,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     weights = {n: load_weights(n, cfg) for n in configs}
     signals = signals_used(weights, configs)
-    providers = load_providers(cfg)
+    providers = load_checked(load_providers, cfg)
     stubbed = stubbed_groups(providers, signals)
     if stubbed and not args.allow_stubs:
         print("Refusing to pool: these providers are fixed-value stubs, so the documents would be placeholders: "

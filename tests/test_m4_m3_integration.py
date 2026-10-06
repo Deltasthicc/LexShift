@@ -144,9 +144,17 @@ def test_a_smaller_bench_cannot_overrule_a_larger_one_end_to_end(m3_artefacts):
 
 
 def test_stub_flags_name_only_the_signals_that_are_still_stubs(m3_artefacts):
-    p = providers_with_real_m3()
+    p = providers_with_real_m3(stubbed=frozenset({"statute"}))  # search, health and authority are real here
     full = rank("q", None, k=4, config="full", providers=p)
-    assert full[0].stubbed == ["rel", "cont"]  # search and statute are fixtures; health and auth are real
+    assert full[0].stubbed == ["cont"]
+    assert rank("q", None, k=4, config="b0", providers=p)[0].stubbed == []
+
+
+def test_placeholder_candidates_make_every_signal_a_stub_even_if_its_module_is_real(m3_artefacts):
+    # search is a stand-in, so health and authority were only asked about ids that are not real results
+    p = providers_with_real_m3(stubbed=frozenset({"search"}))
+    assert rank("q", None, k=4, config="full", providers=p)[0].stubbed == ["rel", "cont", "health", "auth"]
+    assert rank("q", None, k=4, config="b1", providers=p)[0].stubbed == ["rel", "cont"]
     assert rank("q", None, k=4, config="b0", providers=p)[0].stubbed == ["rel"]
 
 

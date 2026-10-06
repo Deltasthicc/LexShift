@@ -13,10 +13,13 @@ matplotlib>=3.8          # M4: report graphs (eval/plots.py imports it lazily; e
 scikit-learn>=1.4        # M3: tf-idf + logistic-regression treatment baseline
 google-genai>=1.0        # M3: Gemini client for the offline few-shot treatment labels (cached)
 
+# --- in use by M1 (m1_index) ---
+# After installing, run once (needs the network):  python -m nltk.downloader stopwords
+nltk>=3.8                # M1: Porter stemmer and the English stop-word list (the corpus above)
+
 # --- planned, uncomment in the commit that first imports them ---
 # M1 (m1_index):      pandas, pyarrow          parquet metadata
 #                     pymupdf                  PDF -> text
-#                     nltk                     Porter stemmer only
 #                     awscli or boto3          public S3 bucket, unsigned
 #                     rank_bm25                sanity check against our own BM25 only, never in the live path
 # M4 (m4_rank, eval): streamlit                optional thin demo page

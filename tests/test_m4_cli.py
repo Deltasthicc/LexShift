@@ -134,6 +134,22 @@ def test_verbose_with_an_unbuilt_statute_module_does_not_crash(make_providers, c
     assert "not built yet" in capsys.readouterr().err
 
 
+def test_a_bug_in_a_module_reads_as_one_clear_line_and_debug_shows_the_traceback(make_providers, capsys):
+    from common.providers import Providers
+
+    good = make_providers()
+
+    def buggy_search(query, k=100, filters=None):
+        return [][3]  # an IndexError from inside the module, like a parser reading past the end of its tokens
+
+    broken = Providers(buggy_search, good.parse_query, good.continuity, good.health, good.authority, frozenset())
+    assert run(["murder AND"], broken) == 3
+    err = capsys.readouterr().err
+    assert "Unexpected error in a module (IndexError)" in err and "--debug" in err and "Traceback" not in err
+    with pytest.raises(IndexError):
+        run(["murder AND", "--debug"], broken)
+
+
 def test_contract_violation_is_reported(make_providers, scenario, capsys):
     scenario["A"]["health"] = 2.0
     assert run(["murder"], make_providers(scenario)) == 3

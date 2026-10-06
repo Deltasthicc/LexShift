@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import math
 import heapq
-from dataclasses import dataclass
+import re
 from pathlib import Path
+
+from common.schema import Hit  # the shared contract's Hit (this module used to define its own)
 
 from .search import SearchEngine
 
@@ -24,12 +26,14 @@ ZONE_WEIGHTS = {
 K1 = 1.2
 B = 0.75
 
+# Syntax that makes a query Boolean/phrase/proximity: quotes, /s /p /k, and ALL-CAPS AND, OR, NOT. Anything else is plain
+# text and is ranked as a bag of words (OR over the stemmed terms), the way BM25 is normally used. Parentheses are grouping
+# only when one of those operators is present: "BNS 3(5)" is a section number, not a group.
+_OPERATORS = re.compile(r'"|(?<!\S)/(?:[sp]|\d+)\b|\b(?:AND|OR|NOT)\b')  # (?<!\S): "/s" is an operator, "u/s" is not
 
-@dataclass
-class Hit:
-    doc_id: str
-    rel: float
-    zone_scores: dict[str, float]
+
+def is_plain_text(query: str) -> bool:
+    return not _OPERATORS.search(query)
 
 
 class RankedSearchEngine:
@@ -51,8 +55,6 @@ class RankedSearchEngine:
         index_path: Path = INDEX_PATH,
         corpus_path: Path = CORPUS_PATH,
     ):
-        print("Loading index...")
-
         with open(index_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -64,11 +66,6 @@ class RankedSearchEngine:
             len(self._all_doc_ids()),
         )
 
-        print(
-            f"Loaded {self.doc_count} documents "
-            f"and {len(self.index)} terms."
-        )
-
         self.search_engine = SearchEngine()
 
         self.docs = {}
@@ -77,8 +74,6 @@ class RankedSearchEngine:
                 if line.strip():
                     doc = json.loads(line)
                     self.docs[doc["doc_id"]] = doc
-
-        print(f"Loaded metadata for {len(self.docs)} documents.")
 
         self.zone_lengths = {}
         self.avg_zone_length = {}
@@ -149,8 +144,16 @@ class RankedSearchEngine:
     def candidate_docs(self, query: str) -> set[str]:
         """
         Use the verified Boolean/phrase/proximity engine to obtain
-        the exact candidate set before ranking.
+        the exact candidate set before ranking. A query with no operators is
+        plain text: every document containing any of its terms is a candidate
+        (the Boolean parser would reject adjacent terms such as "BNS 103").
         """
+        if is_plain_text(query):
+            candidates: set[str] = set()
+            for term in self._terms_from_query(query):
+                candidates.update(self.index.get(term, {}))
+            return candidates
+
         return set(self.search_engine.search(query))
 
     # ---------------------------------------------------------
@@ -340,14 +343,15 @@ class RankedSearchEngine:
             result = {
                 doc_id
                 for doc_id in result
-                if self._doc_year(doc_id) >= filters["min_year"]
+                if (self._doc_year(doc_id) or 0) >= filters["min_year"]  # unknown year never satisfies a year bound
             }
 
         if "max_year" in filters:
             result = {
                 doc_id
                 for doc_id in result
-                if self._doc_year(doc_id) <= filters["max_year"]
+                if self._doc_year(doc_id) is not None
+                and self._doc_year(doc_id) <= filters["max_year"]
             }
 
         if "bench_size" in filters:
@@ -389,12 +393,10 @@ class RankedSearchEngine:
         if not doc:
             return None
 
-        date = str(doc.get("date", ""))
+        # The corpus stores dates as "02 January 2025" (the contract says ISO): read the year from either shape.
+        match = re.search(r"\b(1[89]\d\d|20\d\d)\b", str(doc.get("date", "")))
 
-        try:
-            return int(date[:4])
-        except (ValueError, TypeError):
-            return None
+        return int(match.group(1)) if match else None
 
     # ---------------------------------------------------------
     # Heap-based Top-K
@@ -586,8 +588,13 @@ if __name__ == "__main__":
             f"{i}. {doc_id} "
             f"score={score:.6f}"
         )
-# Team public API
-_engine = RankedSearchEngine()
+# Team public API. The engine (about 70 MB of JSON) is built on the first call, not at import, so importing the package is
+# cheap and does not need the index files.
+_engine: RankedSearchEngine | None = None
+
 
 def search(query: str, k: int = 100, filters: dict | None = None) -> list[Hit]:
+    global _engine
+    if _engine is None:
+        _engine = RankedSearchEngine()
     return _engine.search(query, k=k, filters=filters)

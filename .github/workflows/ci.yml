@@ -15,6 +15,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: NLTK stop-word list (M1's tokenizer reads it at import)
+        run: python -m nltk.downloader stopwords
       - name: Unit tests
         run: python -m pytest
       - name: Smoke test (contracts and end-to-end; stubs unless a module has flipped its switch)

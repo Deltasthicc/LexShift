@@ -236,7 +236,7 @@ applies. This is coarse: it uses the offences of the whole overruling judgment, 
 ### D-024 (2026-10-06) M3 merged into m4-rank and checked against M4
 M3 arrived through a pull request merged into `main`; `main` was merged into `m4-rank`. The only conflicts were append-only
 (`DECISIONS.md`, `requirements.txt`) and were resolved by keeping both sides. M3 edited only its own `m3_treatment:` section of
-`common/config.yaml`. Findings are in [docs/M3_INTEGRATION_REVIEW.md](docs/M3_INTEGRATION_REVIEW.md); they are for M3 to act on and
+`common/config.yaml`. Findings are in [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md); they are for M3 to act on and
 M4 did not change M3's code. What M4 changed, because the integration test showed it:
 * `m4_rank.rank.ArtefactError`: a provider's `KeyError` or `FileNotFoundError` (an id missing from `doc_health.jsonl`, a build step
   not run) is now one clear error naming the call, handled by the CLI, `eval.pool` and `eval.run_ablation`, instead of a traceback.
@@ -248,6 +248,32 @@ M4 did not change M3's code. What M4 changed, because the integration test showe
 * Evidence items may carry optional extra keys; M3 adds `confidence`, `citing_bench`, and `offence_ids` on negatives
   (docs/CONTRACTS.md).
 `stubs.health` and `stubs.authority` stay `true`: `doc_health.jsonl` does not exist until M1's corpus does.
+
+### D-025 (2026-10-06) M1 and M2 merged; the four modules connected and checked together
+`m1-index` and `m2-statute` were merged into `m4-rank` (no conflicts). All four modules were then run end to end on real judgments
+(M1's 200 plus three downloaded from the public bucket) and attacked with random and hostile input. Every finding, with the message to send
+each owner, is in [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md); `python -m eval.conformance` reproduces the data and API checks.
+
+**Edits made in other owners' modules**, because the connection was broken without them and the task was to make it work. Each is the
+smallest edit that fixes a verified failure; owners may take them or replace them:
+* M1 `search.py`: index and corpus paths relative to the repository (they pointed at one person's home folder) and the same files `searcher.py`
+  reads; no progress printing. `searcher.py`: `Hit` imported from `common.schema` instead of redefined; the engine is built on the first
+  call instead of at import; a query with no operators is plain text (candidates are the documents containing any stemmed term, then BM25),
+  so `BNS 103` and `3(5)` and `u/s` work; the year is read from `02 January 2025`-style dates and a missing year satisfies no year bound.
+  `tokenizer.py` and `text_tokenizer.py`: a clear message when the NLTK stop words are missing. `requirements.txt`: `nltk`.
+* M3 `resolver.py`: the dataset's language suffix is allowed in `doc_id` (`2025_1_1_11_EN`), the year is read from any date shape (`year_of`),
+  and the coram reader accepts the recent mixed-case format with an author asterisk.
+* M2: no code changed. `stubs.statute` was set back to `true` (its file `doc_statutes.jsonl` is not committed, so smoke failed);
+  `pytest.ini` now collects `m2_statute/tests`.
+* Not changed anywhere: M1's data files, which break the `Judgment` contract (dates, benches); only M1 can regenerate them.
+
+**M4 changes** (all tested): `ArtefactError` for missing data and unloadable modules, with a module's loading output sent to stderr;
+`rank()` accepts a foreign `Hit` class; **when search is a stub every signal is flagged as stub**, because the other modules were only asked
+about placeholder ids; control characters are stripped from evidence and judge sheets; an unexpected module error is one clear line
+(`--debug` for the traceback); the NLTK stop words are downloaded in CI.
+
+Known failures are marked, not hidden: `tests/test_robustness.py` has two `xfail` tests (M2's quadratic `extract_refs`, M1's `IndexError`
+on `murder AND`); each turns into a pass when its owner fixes it.
 
 ## Open questions
 

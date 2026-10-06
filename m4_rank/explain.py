@@ -6,6 +6,7 @@ Plain ASCII only, so it prints on any console.
 
 from __future__ import annotations
 
+import re
 from typing import Mapping, Sequence
 
 def _health_reason(evidence: Sequence[Mapping[str, str]]) -> str:
@@ -20,9 +21,18 @@ _STUB_TAG = " [STUB signals, not real:"
 _SEPARATOR = " | "
 
 
+_CONTROLS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def strip_controls(text: object) -> str:
+    """Drop control characters. PDF extraction leaves backspaces and bells in judgment text (M1's corpus has them in every
+    document); they would otherwise reach the terminal and the judges' spreadsheets."""
+    return _CONTROLS.sub("", str(text))
+
+
 def _clean(text: object) -> str:
-    """Make module-supplied text safe to embed: one line, and never containing the piece separator."""
-    return " ".join(str(text).replace("|", "/").split())
+    """Make module-supplied text safe to embed: one line, no control characters, never containing the piece separator."""
+    return " ".join(strip_controls(text).replace("|", "/").split())
 
 
 def split_explanation(explanation: str) -> list[str]:

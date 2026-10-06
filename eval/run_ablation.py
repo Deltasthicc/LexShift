@@ -28,7 +28,9 @@ from common.schema import Query  # noqa: E402
 from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries  # noqa: E402
 from eval.metrics import METRIC_NAMES, OBJECTIVES, aggregate, evaluate_query, paired_bootstrap  # noqa: E402
 from eval.tuning import TuningError, save_tuned, tune_config  # noqa: E402
-from m4_rank.rank import ArtefactError, Collected, ContractViolation, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.rank import (  # noqa: E402
+    ArtefactError, Collected, ContractViolation, collect, fuse_collected, load_checked, stubbed_groups,
+)
 from m4_rank.weights import (  # noqa: E402
     SIGNALS, active_signals, canonical_config, format_weights, load_weights, signals_used, weights_source,
 )
@@ -249,7 +251,7 @@ def _main(argv: list[str] | None = None) -> int:
     sources = {n: weights_source(n, cfg) for n in names}
     signals = signals_used(weights, names)
 
-    providers = load_providers(cfg)
+    providers = load_checked(load_providers, cfg)
     stubbed = stubbed_groups(providers, signals)
     if stubbed and not args.allow_stubs:
         print("Refusing to run: these providers are fixed-value stubs, so the numbers would not be results: "
