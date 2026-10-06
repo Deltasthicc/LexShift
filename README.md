@@ -164,14 +164,18 @@ Content-Security-Policy forbids it), and the server checks the `Host` header and
 | Screen | What it shows |
 |---|---|
 | **Search** | free text, a section such as `BNS 103`, or a Boolean/proximity query, with an offence date. Each result has its final score as one bar made of the four signals' contributions, the arithmetic and the reason behind each signal, the treatment status with the evidence sentences in full (with the classifier's confidence and the citing bench), and how far it moved against plain BM25 |
-| **Compare** | BM25 alone beside the selected ranking, with a line joining each judgment's two positions. B0, B1 and the full system are computed from one collection of signals, so switching is instant |
+| **Ranking ladder and Compare** | Relevance, + continuity, + treatment and authority: switching steps re-orders the results with an animation, so the movement caused by each signal is visible. Compare puts BM25 alone beside the selected ranking with a line joining each judgment's two positions. All three systems are computed from one collection of signals, so switching is instant. "Treatment flagged only" keeps the results a treatment signal lowered |
 | **How the query was read** | the governing code, the sections found and their offence ids (M2) |
-| **Reader** | the whole judgment in a side panel with the query's words marked |
+| **Reader** | the whole judgment in a side panel with the query's words marked, previous and next result, and, opened from a piece of treatment evidence, the cited passage found, marked and scrolled to |
 | **System status** | the indicator in the navigation: which modules are real and which are stubs, the weights and where they come from, which data files exist. In stub mode a bar says so on every screen and every stub signal is hatched |
 | **Evaluation** | the state of the hand-made files, the checks of `python -m eval.check_data`, and the ablation tables once they exist (stub runs are labelled) |
 | **Judging** | the blind two-judge workbench for the pooled sheets: it writes `judge1.csv` and `judge2.csv`, shows no scores, ranks or system names, and never suggests a grade ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)) |
 
-The interface adds no ranking logic: it shows what `rank()` computes. Its decisions are in DECISIONS.md D-027.
+Keyboard: `j` and `k` move between results, `Enter` reads the focused judgment, `e` opens its details, `c` copies its id, `1` `2` `3` pick the signals,
+`m` toggles compare, `f` flags only treatment-lowered results, `/` focuses the search box, `?` lists the shortcuts. In the judging screen `0` `1` `2`
+grade the focused document and focus moves to the next ungraded one.
+
+The interface adds no ranking logic: it shows what `rank()` computes. Its decisions are in DECISIONS.md D-027 and D-028.
 
 ### Command-line demo
 

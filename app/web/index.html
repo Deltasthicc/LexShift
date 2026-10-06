@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-motion="on">
+<html lang="en" data-motion="on" data-intro="pending">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,10 +10,16 @@
   <link rel="stylesheet" href="/static/css/styles.css">
   <script src="/static/vendor/gsap/gsap.min.js" defer></script>
   <script src="/static/vendor/gsap/ScrollTrigger.min.js" defer></script>
+  <script src="/static/vendor/gsap/ScrollToPlugin.min.js" defer></script>
+  <script src="/static/vendor/gsap/Flip.min.js" defer></script>
   <script type="module" src="/static/js/main.js"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
+
+  <div class="ambient" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
+  <div class="progress" id="progress" aria-hidden="true"><i></i></div>
+  <div class="busy" id="busy" aria-hidden="true"><i></i></div>
 
   <div class="notice" id="notice" role="status" hidden>
     <span class="notice-text" id="notice-text"></span>
@@ -21,14 +27,15 @@
   </div>
 
   <header class="nav-wrap" id="nav-wrap">
-    <nav class="nav" aria-label="Primary">
+    <nav class="nav" id="nav" aria-label="Primary">
       <a class="brand" href="#/" aria-label="LexShift, search">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <circle cx="16" cy="16" r="12" class="m1"/><circle cx="16" cy="16" r="7.5" class="m2"/><circle cx="16" cy="16" r="3" class="m3"/>
         </svg>
         <span class="brand-name">LexShift</span>
       </a>
-      <ul class="nav-links">
+      <ul class="nav-links" id="nav-links">
+        <li class="nav-ind" id="nav-ind" aria-hidden="true"></li>
         <li><a href="#/" data-route="search">Search</a></li>
         <li><a href="#/method" data-route="method">Method</a></li>
         <li><a href="#/evaluation" data-route="evaluation">Evaluation</a></li>
@@ -50,39 +57,20 @@
     <!-- ================================================================ SEARCH -->
     <div id="view-search" data-view="search">
       <section class="hero" id="top" aria-labelledby="hero-title">
-        <div class="hero-bg" aria-hidden="true"><span class="mesh m-a"></span><span class="mesh m-b"></span><span class="mesh m-c"></span><span class="grain"></span></div>
-        <div class="hero-art" aria-hidden="true" data-scalefade>
-          <svg viewBox="0 0 600 600" class="art-rings">
-            <defs>
-              <clipPath id="lens"><circle cx="300" cy="300" r="268"/></clipPath>
-            </defs>
-            <g clip-path="url(#lens)" class="ledger">
-              <line x1="0" y1="96" x2="600" y2="96"/><line x1="0" y1="132" x2="600" y2="132"/><line x1="0" y1="168" x2="600" y2="168"/>
-              <line x1="0" y1="204" x2="600" y2="204"/><line x1="0" y1="240" x2="600" y2="240"/><line x1="0" y1="276" x2="600" y2="276"/>
-              <line x1="0" y1="312" x2="600" y2="312"/><line x1="0" y1="348" x2="600" y2="348"/><line x1="0" y1="384" x2="600" y2="384"/>
-              <line x1="0" y1="420" x2="600" y2="420"/><line x1="0" y1="456" x2="600" y2="456"/><line x1="0" y1="492" x2="600" y2="492"/>
-            </g>
-            <circle cx="300" cy="300" r="268" class="rim"/>
-            <g class="ring r1"><circle cx="300" cy="300" r="236" class="arc a-rel"/><circle cx="536" cy="300" r="7" class="node n-rel"/></g>
-            <g class="ring r2"><circle cx="300" cy="300" r="188" class="arc a-cont"/><circle cx="300" cy="112" r="7" class="node n-cont"/></g>
-            <g class="ring r3"><circle cx="300" cy="300" r="140" class="arc a-health"/><circle cx="160" cy="300" r="7" class="node n-health"/></g>
-            <g class="ring r4"><circle cx="300" cy="300" r="92" class="arc a-auth"/><circle cx="300" cy="392" r="7" class="node n-auth"/></g>
-            <text x="300" y="338" text-anchor="middle" class="glyph">&#167;</text>
-          </svg>
-        </div>
-
         <div class="hero-inner">
-          <h1 class="hero-title" id="hero-title">
+          <h1 class="hero-title" id="hero-title" data-split>
             Find the precedent
-            <span class="inline-art" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></span>
-            that is still safe to cite.
+            <span class="inline-art art-bars" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></span>
+            that is still safe
+            <span class="inline-art art-ring" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" class="ra"/><circle cx="20" cy="20" r="8" class="rb"/><circle cx="20" cy="20" r="2.6" class="rc"/></svg></span>
+            to cite.
           </h1>
-          <p class="hero-lede">
+          <p class="hero-lede" data-hero="lede">
             Indian Supreme Court judgments, ranked by how well they match, whether the statute they applied still governs your offence date,
             and how later benches treated them. Every status comes with the sentence that supports it.
           </p>
 
-          <form class="searchbox" id="search-form" role="search" autocomplete="off">
+          <form class="searchbox" id="search-form" role="search" autocomplete="off" data-hero="form">
             <div class="searchbar">
               <label class="field field-query" for="q">
                 <span class="field-label">Query</span>
@@ -95,12 +83,25 @@
               </label>
             </div>
             <div class="cta-row">
-              <button type="submit" class="btn btn-primary" id="btn-search">Search precedents</button>
-              <button type="button" class="btn btn-secondary" id="btn-compare">Compare with BM25</button>
+              <button type="submit" class="btn btn-primary magnetic" id="btn-search">Search precedents</button>
+              <button type="button" class="btn btn-secondary magnetic" id="btn-compare">Compare with BM25</button>
             </div>
             <div class="suggest" id="suggest" role="listbox" aria-label="Suggested queries" hidden></div>
           </form>
         </div>
+
+        <div class="hero-art" id="hero-art" aria-hidden="true">
+          <div class="art-plate plate-a"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><b class="bar b-rel"></b><b class="bar b-cont"></b><b class="bar b-health"></b></div>
+          <div class="art-plate plate-b"><span class="seal"></span><i class="l1"></i><i class="l2"></i><i class="l3"></i></div>
+          <div class="art-lens">
+            <svg class="ring r1" viewBox="0 0 200 200"><circle cx="100" cy="100" r="92" class="arc a-rel"/><circle cx="192" cy="100" r="4.5" class="node n-rel"/></svg>
+            <svg class="ring r2" viewBox="0 0 200 200"><circle cx="100" cy="100" r="74" class="arc a-cont"/><circle cx="100" cy="26" r="4.5" class="node n-cont"/></svg>
+            <svg class="ring r3" viewBox="0 0 200 200"><circle cx="100" cy="100" r="56" class="arc a-health"/><circle cx="44" cy="100" r="4.5" class="node n-health"/></svg>
+            <svg class="ring r4" viewBox="0 0 200 200"><circle cx="100" cy="100" r="38" class="arc a-auth"/><circle cx="100" cy="138" r="4.5" class="node n-auth"/></svg>
+            <span class="glyph">&#167;</span>
+          </div>
+        </div>
+        <button type="button" class="scroll-cue" id="scroll-cue" aria-label="Scroll to how it works"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6"/></svg></button>
       </section>
 
       <!-- ============================================================ RESULTS -->
@@ -111,23 +112,27 @@
               <h2 class="ws-title" id="ws-title">Results</h2>
               <p class="ws-sub" id="ws-sub"></p>
             </div>
-            <div class="ws-controls">
-              <div class="segmented" role="group" aria-label="View">
-                <button type="button" data-mode="ranked" class="seg-btn is-on" aria-pressed="true">Ranked</button>
-                <button type="button" data-mode="compare" class="seg-btn" aria-pressed="false">Compare</button>
-              </div>
-              <label class="select" for="cfg"><span class="sr">Ranking configuration</span>
-                <select id="cfg">
-                  <option value="full">Full: relevance, continuity, treatment, authority</option>
-                  <option value="b1">B1: relevance and continuity</option>
-                  <option value="b0">B0: BM25 relevance only</option>
-                </select>
-              </label>
-              <label class="select select-k" for="kk"><span class="sr">Number of results</span>
-                <select id="kk"><option>5</option><option selected>10</option><option>20</option><option>50</option></select>
-              </label>
-            </div>
           </header>
+
+          <div class="ws-toolbar" id="ws-toolbar">
+            <div class="ladder" id="ladder" role="radiogroup" aria-label="Signals used for ranking">
+              <span class="thumb" id="ladder-thumb" aria-hidden="true"></span>
+              <button type="button" role="radio" data-config="b0" aria-checked="false">Relevance</button>
+              <button type="button" role="radio" data-config="b1" aria-checked="false">+ Continuity</button>
+              <button type="button" role="radio" data-config="full" aria-checked="true">+ Treatment, authority</button>
+            </div>
+            <div class="segmented" id="mode" role="group" aria-label="View">
+              <button type="button" data-mode="ranked" class="seg-btn is-on" aria-pressed="true">Ranked</button>
+              <button type="button" data-mode="compare" class="seg-btn" aria-pressed="false">Compare</button>
+            </div>
+            <label class="select select-k" for="kk"><span class="sr">Number of results</span>
+              <select id="kk"><option>5</option><option selected>10</option><option>20</option><option>50</option></select>
+            </label>
+            <button type="button" class="chip-btn" id="only-lowered" aria-pressed="false">Treatment flagged only</button>
+            <button type="button" class="chip-btn" id="expand-all" aria-pressed="false">Expand all</button>
+            <button type="button" class="icon-btn" id="shortcuts-btn" aria-label="Keyboard shortcuts"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
+          </div>
+
           <div class="callout callout-warn" id="ws-stub" role="alert" hidden></div>
           <div class="callout callout-error" id="ws-error" role="alert" hidden></div>
           <div class="ws-grid">
@@ -142,82 +147,81 @@
         </div>
       </section>
 
-      <!-- ============================================================ METHOD (interest) -->
+      <!-- ============================================================ METHOD (interest: horizontal accordion) -->
       <section class="section" id="method" aria-labelledby="method-title">
         <div class="container">
-          <header class="section-head reveal">
+          <header class="section-head" data-reveal>
             <h2 id="method-title">One score, four signals, each of them inspectable.</h2>
-            <p>The weights below are read from the running configuration. Nothing on this page is a stand-in unless it says so.</p>
+            <p>Hover or focus a signal to open it. The weights are read from the running configuration; nothing here is a stand-in unless it says so.</p>
           </header>
-          <div class="bento" id="bento">
-            <article class="card card-formula reveal" data-card="formula">
-              <div class="card-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span></div>
-              <div class="card-body">
-                <p class="card-kicker">Ranking function</p>
-                <p class="formula" aria-label="final equals w r times relevance plus w s times continuity plus w h times treatment plus w a times authority">
-                  <span class="f-final">final</span><span class="f-eq">=</span>
-                  <span class="f-term t-rel">w<sub>r</sub>&middot;rel</span><span class="f-plus">+</span>
-                  <span class="f-term t-cont">w<sub>s</sub>&middot;cont</span><span class="f-plus">+</span>
-                  <span class="f-term t-health">w<sub>h</sub>&middot;health</span><span class="f-plus">+</span>
-                  <span class="f-term t-auth">w<sub>a</sub>&middot;auth</span>
-                </p>
-                <div class="weights" id="weights-live"></div>
-                <p class="card-note" id="weights-note">Reading the configuration.</p>
-              </div>
-            </article>
-            <article class="card card-signal card-rel reveal" data-card="rel">
-              <div class="card-art" aria-hidden="true"><span class="orb o1"></span></div>
-              <div class="card-body">
-                <p class="card-kicker">Relevance</p>
+          <p class="formula" id="formula" data-reveal aria-label="final equals w r times relevance plus w s times continuity plus w h times treatment plus w a times authority">
+            <span class="f-final">final</span><span class="f-eq">=</span>
+            <button type="button" class="f-term t-rel" data-sig="rel">w<sub>r</sub>&middot;rel</button><span class="f-plus">+</span>
+            <button type="button" class="f-term t-cont" data-sig="cont">w<sub>s</sub>&middot;cont</button><span class="f-plus">+</span>
+            <button type="button" class="f-term t-health" data-sig="health">w<sub>h</sub>&middot;health</button><span class="f-plus">+</span>
+            <button type="button" class="f-term t-auth" data-sig="auth">w<sub>a</sub>&middot;auth</button>
+          </p>
+          <div class="acc" id="acc">
+            <article class="acc-slice sig-rel is-open" data-sig="rel" tabindex="0" aria-expanded="true" aria-label="Relevance">
+              <div class="acc-rail"><span class="acc-name">Relevance</span></div>
+              <div class="acc-body">
                 <h3>BM25 over the parts of a judgment</h3>
-                <p>Headnote, facts, arguments and holding are indexed as separate zones with their own weights.</p>
-                <p class="card-state" data-state="search"></p>
+                <p>Headnote, facts, arguments and holding are indexed as separate zones with their own weights, then scored with BM25 and normalised over the top candidates.</p>
+                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="rel">0.00</b></div>
+                <p class="acc-state" data-state="search"></p>
               </div>
             </article>
-            <article class="card card-signal card-cont reveal" data-card="cont">
-              <div class="card-art" aria-hidden="true"><span class="orb o1"></span></div>
-              <div class="card-body">
-                <p class="card-kicker">Continuity</p>
+            <article class="acc-slice sig-cont" data-sig="cont" tabindex="0" aria-expanded="false" aria-label="Continuity">
+              <div class="acc-rail"><span class="acc-name">Continuity</span></div>
+              <div class="acc-body">
                 <h3>Does the statute still govern?</h3>
-                <p>BNS 103 reaches IPC 302 precedents, scaled by how much the provision changed.</p>
-                <p class="card-state" data-state="statute"></p>
+                <p>The offence date decides IPC or BNS. A BNS query still reaches IPC-era precedents, scaled by how much the provision changed: BNS 103 reaches IPC 302 in full.</p>
+                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="cont">0.00</b></div>
+                <p class="acc-state" data-state="statute"></p>
               </div>
             </article>
-            <article class="card card-signal card-health reveal" data-card="health">
-              <div class="card-art" aria-hidden="true"><span class="orb o1"></span></div>
-              <div class="card-body">
-                <p class="card-kicker">Treatment</p>
+            <article class="acc-slice sig-health" data-sig="health" tabindex="0" aria-expanded="false" aria-label="Treatment">
+              <div class="acc-rail"><span class="acc-name">Treatment</span></div>
+              <div class="acc-body">
                 <h3>What later benches did</h3>
-                <p>Lowered only by a valid negative from a bench at least as large, with the sentence shown.</p>
-                <p class="card-state" data-state="health"></p>
+                <p>Lowered only by a valid negative treatment from a bench at least as large as the one that decided the case, and always shown with the sentence and a confidence.</p>
+                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="health">0.00</b></div>
+                <p class="acc-state" data-state="health"></p>
               </div>
             </article>
-            <article class="card card-signal card-auth reveal" data-card="auth">
-              <div class="card-art" aria-hidden="true"><span class="orb o1"></span></div>
-              <div class="card-body">
-                <p class="card-kicker">Authority</p>
+            <article class="acc-slice sig-auth" data-sig="auth" tabindex="0" aria-expanded="false" aria-label="Authority">
+              <div class="acc-rail"><span class="acc-name">Authority</span></div>
+              <div class="acc-body">
                 <h3>Who cites it, and how big the bench</h3>
-                <p>PageRank over followed and neutral citations, weighted by bench size.</p>
-                <p class="card-state" data-state="authority"></p>
+                <p>PageRank over followed and neutral citations, weighted by bench size. Recency never raises or lowers it.</p>
+                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="auth">0.00</b></div>
+                <p class="acc-state" data-state="authority"></p>
               </div>
             </article>
           </div>
+          <p class="card-note" id="weights-note" data-reveal>Reading the configuration.</p>
         </div>
       </section>
 
-      <!-- ============================================================ PRINCIPLES (desire: stacking) -->
-      <section class="section stack-section" id="principles" aria-labelledby="principles-title">
+      <!-- ============================================================ STATEMENT (desire: scrubbed text reveal) -->
+      <section class="section statement" id="statement" aria-label="The idea">
         <div class="container">
-          <header class="section-head reveal">
+          <p class="statement-text" id="statement-text">A precedent can match your query perfectly and still be unsafe to cite. <em>The statute it applied may have been replaced</em>, or <em>a later bench may have overruled it</em>. LexShift puts statutory continuity and judicial treatment inside the ranking itself, and shows the sentence behind every status.</p>
+        </div>
+      </section>
+
+      <!-- ============================================================ PRINCIPLES (desire: pinned split) -->
+      <section class="section split-section" id="principles" aria-labelledby="principles-title">
+        <div class="container split" id="split">
+          <div class="split-left" id="split-left">
             <h2 id="principles-title">Three rules the ranking does not break.</h2>
-          </header>
-          <div class="stack" id="stack">
-            <article class="stack-card" data-stack>
-              <div class="stack-copy">
-                <h3>Old precedents still count.</h3>
-                <p>The BNS replaced the IPC on 1 July 2024, but a BNS query still retrieves IPC-era judgments. Continuity lowers a result only in proportion to how much the law changed.</p>
-              </div>
-              <div class="stack-art" aria-hidden="true" data-scalefade>
+            <p class="split-sub">They are written into the scoring, not added afterwards.</p>
+            <ol class="split-dots" id="split-dots" aria-hidden="true"><li class="is-on"></li><li></li><li></li></ol>
+            <p class="split-now" id="split-now">Old precedents still count</p>
+          </div>
+          <div class="split-right">
+            <article class="rule" data-rule="0" data-title="Old precedents still count">
+              <div class="rule-art" aria-hidden="true">
                 <svg viewBox="0 0 360 220" class="diagram">
                   <rect x="24" y="40" width="112" height="56" rx="14" class="d-box"/><text x="80" y="74" text-anchor="middle" class="d-text">IPC 302</text>
                   <rect x="224" y="40" width="112" height="56" rx="14" class="d-box d-on"/><text x="280" y="74" text-anchor="middle" class="d-text">BNS 103</text>
@@ -226,13 +230,11 @@
                   <text x="24" y="176" class="d-small">equivalent: full weight carries over</text>
                 </svg>
               </div>
+              <h3>Old precedents still count.</h3>
+              <p>The BNS replaced the IPC on 1 July 2024, but a BNS query still retrieves IPC-era judgments. Continuity lowers a result only in proportion to how much the law changed.</p>
             </article>
-            <article class="stack-card" data-stack>
-              <div class="stack-copy">
-                <h3>No keyword matching for treatment.</h3>
-                <p>Only the sentences around a specific cited case are classified. Words such as &ldquo;overruled&rdquo; in an objection, or &ldquo;set aside&rdquo; on appeal, are not an overruling of a precedent.</p>
-              </div>
-              <div class="stack-art" aria-hidden="true" data-scalefade>
+            <article class="rule" data-rule="1" data-title="No keyword matching for treatment">
+              <div class="rule-art" aria-hidden="true">
                 <svg viewBox="0 0 360 220" class="diagram">
                   <rect x="24" y="36" width="312" height="12" rx="6" class="d-track"/><rect x="24" y="62" width="150" height="12" rx="6" class="d-track"/>
                   <rect x="182" y="62" width="154" height="12" rx="6" class="d-fill f-health"/>
@@ -241,13 +243,11 @@
                   <path d="M258 74 V150 H166" class="d-line"/>
                 </svg>
               </div>
+              <h3>No keyword matching for treatment.</h3>
+              <p>Only the sentences around a specific cited case are classified. Words such as &ldquo;overruled&rdquo; in an objection, or &ldquo;set aside&rdquo; on appeal, are not an overruling of a precedent.</p>
             </article>
-            <article class="stack-card" data-stack>
-              <div class="stack-copy">
-                <h3>Newer is not stronger.</h3>
-                <p>Recency never raises or lowers a score. Bench strength and treatment do, because a smaller bench cannot overrule a larger one.</p>
-              </div>
-              <div class="stack-art" aria-hidden="true" data-scalefade>
+            <article class="rule" data-rule="2" data-title="Newer is not stronger">
+              <div class="rule-art" aria-hidden="true">
                 <svg viewBox="0 0 360 220" class="diagram">
                   <path d="M24 188 H336" class="d-line"/>
                   <rect x="44" y="108" width="36" height="80" rx="8" class="d-fill f-auth"/><rect x="116" y="68" width="36" height="120" rx="8" class="d-fill f-auth"/>
@@ -255,25 +255,30 @@
                   <text x="62" y="208" text-anchor="middle" class="d-small">older</text><text x="278" y="208" text-anchor="middle" class="d-small">newer</text>
                 </svg>
               </div>
+              <h3>Newer is not stronger.</h3>
+              <p>Recency never raises or lowers a score. Bench strength and treatment do, because a smaller bench cannot overrule a larger one.</p>
             </article>
           </div>
         </div>
       </section>
 
-      <!-- ============================================================ EVIDENCE (carousel) + CORPUS (marquee) -->
+      <!-- ============================================================ EVIDENCE (desire: feedback carousel) -->
       <section class="section evidence-section" id="evidence" aria-labelledby="evidence-title">
         <div class="container">
-          <header class="section-head reveal">
+          <header class="section-head" data-reveal>
             <h2 id="evidence-title">The sentence behind the status.</h2>
             <p id="evidence-sub">Run a search and the treatment evidence from your results appears here.</p>
           </header>
-          <div class="carousel reveal" id="carousel" aria-roledescription="carousel" aria-label="Treatment evidence from the current results">
+          <div class="carousel" id="carousel" data-reveal aria-roledescription="carousel" aria-label="Treatment evidence from the current results">
             <div class="plates" id="plates" aria-hidden="true"></div>
             <div class="quote-wrap">
-              <blockquote class="quote" id="quote"><p>No evidence to show yet.</p></blockquote>
-              <p class="quote-meta" id="quote-meta"></p>
+              <div class="quote-stage" id="quote-stage">
+                <blockquote class="quote" id="quote"><p>No evidence to show yet.</p></blockquote>
+                <p class="quote-meta" id="quote-meta"></p>
+              </div>
               <div class="carousel-controls">
                 <button type="button" class="arrow" id="car-prev" aria-label="Previous evidence" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+                <span class="car-dots" id="car-dots" aria-hidden="true"></span>
                 <span class="car-count" id="car-count" aria-live="polite"></span>
                 <button type="button" class="arrow" id="car-next" aria-label="Next evidence" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
               </div>
@@ -282,16 +287,11 @@
         </div>
       </section>
 
-      <section class="marquee-section" id="corpus" aria-label="Judgments in the index" hidden>
-        <p class="marquee-title" id="marquee-title"></p>
-        <div class="marquee" id="marquee"><div class="marquee-track" id="marquee-track"></div></div>
-      </section>
-
       <!-- ============================================================ ACTION -->
       <section class="section cta-section" id="cta" aria-labelledby="cta-title">
         <div class="container cta-inner">
-          <h2 class="cta-title" id="cta-title">Run the search that shows its work.</h2>
-          <button type="button" class="btn btn-primary btn-xl" id="cta-btn">Start a search</button>
+          <h2 class="cta-title" id="cta-title" data-reveal>Run the search that shows its work.</h2>
+          <button type="button" class="btn btn-primary btn-xl magnetic" id="cta-btn">Start a search</button>
         </div>
       </section>
     </div>
@@ -327,6 +327,8 @@
     </div>
   </footer>
 
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
   <div class="scrim" id="scrim" hidden></div>
 
   <aside class="drawer drawer-reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="reader-title" hidden>
@@ -335,7 +337,11 @@
         <h2 id="reader-title">Judgment</h2>
         <p id="reader-meta" class="drawer-meta"></p>
       </div>
-      <button type="button" class="icon-btn" id="reader-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="drawer-tools">
+        <button type="button" class="icon-btn" id="reader-prev" aria-label="Previous result" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button type="button" class="icon-btn" id="reader-next" aria-label="Next result" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button type="button" class="icon-btn" id="reader-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
     </header>
     <div class="drawer-body" id="reader-body"></div>
   </aside>
@@ -343,9 +349,17 @@
   <aside class="drawer drawer-status" id="status-panel" role="dialog" aria-modal="true" aria-labelledby="status-title" hidden>
     <header class="drawer-head">
       <div class="drawer-heading"><h2 id="status-title">System status</h2><p class="drawer-meta" id="status-meta"></p></div>
-      <button type="button" class="icon-btn" id="status-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="drawer-tools"><button type="button" class="icon-btn" id="status-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     </header>
     <div class="drawer-body" id="status-body"></div>
+  </aside>
+
+  <aside class="drawer drawer-keys" id="keys-panel" role="dialog" aria-modal="true" aria-labelledby="keys-title" hidden>
+    <header class="drawer-head">
+      <div class="drawer-heading"><h2 id="keys-title">Keyboard shortcuts</h2><p class="drawer-meta">Work through results without the mouse.</p></div>
+      <div class="drawer-tools"><button type="button" class="icon-btn" id="keys-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    </header>
+    <div class="drawer-body" id="keys-body"></div>
   </aside>
 </body>
 </html>

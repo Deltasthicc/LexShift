@@ -429,8 +429,8 @@ def test_the_vendored_libraries_are_the_files_the_provenance_note_describes():
 
     static = WEB / "static"
     note = (static / "vendor" / "README.md").read_text(encoding="utf-8")
-    files = ["vendor/gsap/gsap.min.js", "vendor/gsap/ScrollTrigger.min.js", "fonts/outfit-latin-wght-normal.woff2",
-             "fonts/outfit-latin-ext-wght-normal.woff2"]
+    files = ["vendor/gsap/gsap.min.js", "vendor/gsap/ScrollTrigger.min.js", "vendor/gsap/ScrollToPlugin.min.js", "vendor/gsap/Flip.min.js",
+             "fonts/outfit-latin-wght-normal.woff2", "fonts/outfit-latin-ext-wght-normal.woff2"]
     for rel in files:
         path = static / rel
         assert path.is_file(), f"{rel} is missing"
@@ -449,13 +449,42 @@ def test_the_vendored_scripts_do_not_touch_the_network():
 
 def test_the_page_loads_gsap_before_its_own_code_and_declares_the_font():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    assert html.index("gsap.min.js") < html.index("ScrollTrigger.min.js") < html.index("/static/js/main.js")
+    assert html.index("gsap.min.js") < html.index("ScrollTrigger.min.js") < html.index("ScrollToPlugin.min.js") < html.index("Flip.min.js") < html.index("/static/js/main.js")
     css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
     assert css.count("@font-face") == 2 and "/static/fonts/outfit-latin-wght-normal.woff2" in css and "font-src 'self'" in __import__("app.server", fromlist=["CSP"]).CSP
 
 
 def test_the_server_serves_the_vendored_files_with_the_right_types(live):
     for path, ctype in (("/static/vendor/gsap/gsap.min.js", "text/javascript"), ("/static/vendor/gsap/ScrollTrigger.min.js", "text/javascript"),
+                        ("/static/vendor/gsap/Flip.min.js", "text/javascript"), ("/static/vendor/gsap/ScrollToPlugin.min.js", "text/javascript"),
                         ("/static/fonts/outfit-latin-wght-normal.woff2", "font/woff2")):
         status, resp, raw = live.request("GET", path)
-        assert status == 200 and resp.getheader("Content-Type").startswith(ctype) and len(raw) > 10_000, path
+        assert status == 200 and resp.getheader("Content-Type").startswith(ctype) and len(raw) > 3_000, path
+
+
+# ----------------------------------------------------------------------------------------------- smoothness regressions
+def test_nothing_is_dimmed_with_a_brightness_filter():
+    """Stacked cards and fading images were darkened with brightness(): that is what produced black panels. Opacity and scale only."""
+    for path in _web_files(".css", ".js"):
+        assert "brightness(" not in path.read_text(encoding="utf-8"), f"{path.name} dims with a brightness filter"
+
+
+def test_scroll_linked_motion_is_always_smoothed():
+    source = (WEB / "static" / "js" / "motion.js").read_text(encoding="utf-8")
+    assert "scrub: true" not in source, "an unsmoothed scrub steps with every wheel notch; give it a number"
+    assert source.count("scrub:") >= 6
+
+
+def test_the_hero_is_hidden_from_first_paint_with_a_failsafe_and_no_section_clips_its_art():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert 'data-intro="pending"' in html
+    assert 'html[data-intro="pending"]' in css and "intro-failsafe" in css, "the intro must not flash, and must show itself even if the script never runs"
+    hero_rule = re.search(r"\.hero \{[^}]*\}", css).group(0)
+    assert "overflow" not in hero_rule, "a hero that clips its own art makes a hard edge"
+    assert 'id="progress"' in html and "ambient" in html, "one fixed background and a progress line"
+
+
+def test_the_page_has_no_remaining_reveal_class_that_hides_content_by_css():
+    css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert ".reveal" not in css, "content is hidden by the script only, so a script that fails leaves it visible"

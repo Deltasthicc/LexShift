@@ -1,7 +1,7 @@
 // System status: the nav indicator, the stub-mode notice, the status panel, and the live parts of the method cards.
 import { api } from "./api.js";
 import { $, $$, clear, f2, formatBytes, GROUP_LABEL, h, pct, SIGNALS, SIGNAL_LABEL, show } from "./dom.js";
-import { openDrawer } from "./reader.js";
+import { openPanel } from "./ui.js";
 
 export const appStatus = { value: null };
 
@@ -44,20 +44,20 @@ function measureNotice() {
 }
 window.addEventListener("resize", measureNotice);
 
-function renderBento(status) {
-  const box = $("#weights-live");
+/** Fill the signal accordion with the live weights and each module's state. The bars grow when the section scrolls into view. */
+function renderAccordion(status) {
   const note = $("#weights-note");
-  clear(box);
   const full = status && status.configs && status.configs.full;
-  if (full) {
-    for (const s of SIGNALS) {
-      const w = full.weights[s.key] || 0;
-      box.appendChild(h("div", { class: `weight-row sig-${s.key}` }, [h("span", {}, SIGNAL_LABEL[s.key]), h("span", { class: "bar" }, h("i", { vars: { "--w": pct(w) } })), h("b", {}, f2(w))]));
-    }
-    note.textContent = `Weights of the full configuration: ${full.source}. B0 uses relevance only; B1 adds continuity.`;
-  } else {
-    note.textContent = "The weights could not be read.";
+  for (const s of SIGNALS) {
+    const w = full ? full.weights[s.key] || 0 : 0;
+    const value = $(`[data-weight="${s.key}"]`);
+    if (value) value.textContent = f2(w);
+    const fill = $(`.acc-slice[data-sig="${s.key}"] .acc-weight .bar i`);
+    if (fill) fill.dataset.w = String(Math.max(0, Math.min(1, w)));
   }
+  note.textContent = full
+    ? `Weights of the full configuration: ${full.source}. B0 uses relevance only; B1 adds continuity.`
+    : "The weights could not be read.";
   $$("[data-state]").forEach((p) => {
     const group = p.dataset.state;
     const value = status && status.providers ? status.providers[group] : null;
@@ -108,7 +108,7 @@ function renderPanel(status) {
 export function openStatus() {
   if (!appStatus.value) return;
   renderPanel(appStatus.value);
-  openDrawer($("#status-panel"), $("#status-close"));
+  openPanel($("#status-panel"), $("#status-close"));
 }
 
 export async function initStatus() {
@@ -120,11 +120,11 @@ export async function initStatus() {
     appStatus.value = null;
     updateNav(null);
     updateNotice(null, err.message);
-    renderBento(null);
+    renderAccordion(null);
     return null;
   }
   updateNav(appStatus.value);
   updateNotice(appStatus.value);
-  renderBento(appStatus.value);
+  renderAccordion(appStatus.value);
   return appStatus.value;
 }

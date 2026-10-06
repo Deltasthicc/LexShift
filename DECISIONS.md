@@ -332,6 +332,35 @@ on `murder AND`); each turns into a pass when its owner fixes it.
   finding:** on M1's 200-judgment sample (all 2025) 2 of the 25 example queries are answerable, 16 are thin and 7 empty, so the corpus must
   grow in volume and years before the query list is final (request to M1, in docs/INTEGRATION_REVIEW.md).
 
+### D-028 (2026-10-07) Smoother motion, no black panels, and the second design pass
+The owner reported abrupt cut-offs, black areas and motion that did not flow. Causes found in the code, and what changed:
+* **Black panels.** Stacked cards and fading images were dimmed with `brightness(...)`, which turns a card black. No brightness filter is used
+  any more (a test fails if one returns); cards and images use scale, offset and a mild opacity.
+* **Hard edges.** The hero clipped its own gradients and art (`overflow: clip`) and every section drew its own backdrop. There is now one fixed ambient
+  background behind the whole page that drifts with the scroll, sections have none, dividers are feathered hairlines, and the hero art is masked, not clipped.
+* **Flash then gap on load.** The hero painted, the script hid it and animated it back in. It is now hidden from the first paint by CSS
+  (`html[data-intro="pending"]`), the script clears the flag as it starts the intro, and a CSS animation shows everything after 4.5 s if the script never
+  runs; a second failsafe completes the timeline if frames are not being produced.
+* **Steppy scroll motion.** Scrubbed tweens followed the wheel 1:1. Every scroll-linked tween now has smoothing (`scrub: 0.3` to `1.4`; a test rejects
+  `scrub: true`), and CSS smooth scrolling was removed (it fights ScrollTrigger) in favour of eased `ScrollToPlugin` tweens.
+* **Instant show and hide.** Panels, suggestions, views and results appeared and vanished. Drawers slide, suggestions pop, views cross-fade (and route
+  changes are serialised so two fades never overlap), results stagger in, and a theme change cross-fades.
+* **Cost.** Large blur filters, backdrop blur on every panel and SVG rings animated on the main thread were removed; the rings and floating plates use the
+  individual `rotate` and `translate` CSS properties on their own layers, and GSAP keeps `transform` for scroll and pointer effects on the same elements.
+
+The `gpt-taste` skill was run again and its seeded selection followed: **Artistic Asymmetry** hero (text offset left, art floating in from the bottom
+right), **Geist** (not bundled: it needs a download the owner has not approved, so the stack lists Geist first and falls back to the bundled Outfit),
+**Inline Typography Images** (two pills in the headline), **Horizontal Accordions** (the four signals; replaces the bento, whose gapless property is now the
+accordion's: its slices always sum to the full width, measured 1,145 against 1,144 pixels), **Feedback Carousel** (the evidence of the current results, now
+with drag, dots and "show it in the judgment"), **Scroll Pinning** (the principles section) and **Scrubbing Text Reveal** (the statement). `Flip` and
+`ScrollToPlugin` were copied from the already downloaded and hash-checked `gsap-3.15.0.tgz`; nothing new was fetched.
+
+New interactions: the ranking ladder with animated re-ordering, treatment-flagged filter, expand all, keyboard navigation and a shortcuts panel, copy id,
+reader previous and next, jump from a piece of evidence to the cited passage in the citing judgment, tooltips on the score bars, toasts, a scroll-progress
+line and a request indicator, magnetic buttons and a pointer-following glow on the accordion, and in the judging screen auto-advance to the next ungraded
+document with `j`, `k` and `n`. Measured here: the structure, states and behaviour in a browser pane at phone, tablet and desktop widths. Not measured:
+frame rate on the owner's machine (the pane throttles animation frames, so timing could not be profiled).
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

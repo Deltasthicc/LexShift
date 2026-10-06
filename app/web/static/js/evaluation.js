@@ -1,6 +1,7 @@
 // The evaluation view: what the numbers are computed from, the checks on the hand-made files, and the results when they exist.
 import { api } from "./api.js";
-import { $, clear, f3, h, pct, plural } from "./dom.js";
+import { $, $$, clear, f3, h, plural } from "./dom.js";
+import { animateIn, countUp, growMeters } from "./motion.js";
 
 const METRICS = ["P@5", "P@10", "R@10", "MAP", "nDCG@10", "harmful@10", "judged@10"];
 const METRIC_HELP = {
@@ -12,8 +13,8 @@ const SIG_KEYS = [["w_rel", "rel"], ["w_cont", "cont"], ["w_health", "health"], 
 function tile(label, value, small, detail, ratio) {
   return h("div", { class: "tile" }, [
     h("span", { class: "k" }, label),
-    h("span", { class: "v" }, [String(value), small ? h("small", {}, small) : null]),
-    ratio == null ? null : h("div", { class: `meter${ratio >= 1 ? " is-done" : ""}` }, h("i", { vars: { "--w": pct(ratio) } })),
+    h("span", { class: "v" }, [h("span", { dataset: { n: String(value) } }, String(value)), small ? h("small", {}, small) : null]),
+    ratio == null ? null : h("div", { class: `meter${ratio >= 1 ? " is-done" : ""}` }, h("i", { dataset: { w: String(Math.max(0, Math.min(1, ratio))) } })),
     h("span", { class: "d" }, detail),
   ]);
 }
@@ -42,7 +43,7 @@ function runCard(run) {
       const v = row[m];
       if (typeof v !== "number") return h("td", {}, "n/a");
       const classes = [v === best[m] ? "best" : "", m === "harmful@10" && v > 0 ? "harm" : ""].filter(Boolean).join(" ");
-      return h("td", { class: classes }, h("div", { class: "cell" }, [f3(v), m === "harmful@10" ? null : h("div", { class: "meter" }, h("i", { vars: { "--w": pct(v) } }))]));
+      return h("td", { class: classes }, h("div", { class: "cell" }, [f3(v), m === "harmful@10" ? null : h("div", { class: "meter" }, h("i", { dataset: { w: String(Math.max(0, Math.min(1, v))) } }))]));
     }),
   ]));
   const types = Object.entries(run.ndcg_by_type || {});
@@ -100,4 +101,8 @@ export async function renderEvaluation() {
     h("h2", { class: "block-title" }, "Results"),
     data.runs.length ? h("div", { class: "runs" }, data.runs.map(runCard)) : emptyResults(),
   ]));
+  // the sections rise in one after another, the meters grow and the counts run up from zero
+  animateIn(Array.from(body.children), { y: 30, stagger: 0.1 });
+  growMeters(body);
+  $$("[data-n]", body).forEach((el) => countUp(el, Number(el.dataset.n), 0, 1));
 }
