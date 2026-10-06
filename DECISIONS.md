@@ -118,21 +118,34 @@ truncated to `ranking.max_evidence`; the explanation still counts the full list.
 values, because those come from the system under test and would make the grades circular; which system returned what is kept in
 a separate `provenance.csv`. Pooling is **incremental**: documents already in `qrels.tsv` are not asked about again, so a second
 round after tuning only adds what is new. A round directory is never overwritten (`--force` regenerates only the template,
-provenance and summary, never the judges' files), and pooling from stub providers is refused. `eval/make_qrels.py` requires each
+provenance and summary, and is refused once any judge file exists, because replacing the template would orphan the grades),
+and pooling from stub providers is refused. `eval/make_qrels.py` requires each
 judge file to contain exactly the template's rows, reports percent agreement and Cohen's kappa (plain and quadratic-weighted,
 because grades are ordinal), requires every disagreement to be adjudicated by re-reading (the `adjudicated` column), refuses to
-change a grade already in `qrels.tsv`, and writes `qrels.tsv` only when the round is complete (`--allow-incomplete` writes the
-settled rows). No tool assigns a grade. The Guide's wording is "pooled top-20 of all configs, two judges"; the blind sheet, the
-incremental rounds and the adjudication file are our additions.
+change a grade already in `qrels.tsv`, and writes `qrels.tsv` (atomically) only when the round is complete
+(`--allow-incomplete` writes the settled rows). While a judge file has problems it leaves `disagreements.csv` untouched, so a
+damaged file can never wipe adjudications already typed in. No tool assigns a grade. The Guide's wording is "pooled top-20 of
+all configs, two judges"; the blind sheet, the incremental rounds and the adjudication file are our additions.
 
-### D-015 (2026-10-06) Review fixes to M4 and two small shared-file edits
-Found while reviewing M4: `harmful@10` and `judged@10` were selectable as tuning objectives although the first is
-lower-is-better and the second measures the pool, so tuning could have optimised the wrong direction; objectives are now
-restricted to `eval.metrics.OBJECTIVES` (nDCG@10, MAP, P@5, P@10, R@10). The `ranking:` and `evaluation:` config sections are
-validated with clear messages (`m4_rank.weights.validate_ranking_config`). Two additive edits to shared files, flagged for the
-other owners: `common/config.yaml` gained `paths.judging_dir`, and `common/io.read_delimited` reads `utf-8-sig`, because
-spreadsheet programs write a byte-order mark that would otherwise corrupt the first column name; files without one read as
-before.
+### D-015 (2026-10-06) Review of the M4 branch: what was found and fixed
+A structured review of `main..m4-rank` found 21 issues; all real ones were fixed and covered by tests. The substantive ones:
+`make_qrels` could wipe typed adjudications when a judge file was damaged; `pool --force` could orphan graded sheets; the CLI
+parsed other modules' explanation text back apart and could crash on a ` | ` or a newline in it (notes are now sanitised and the
+renderer no longer trusts them); `harmful@10` (lower is better) and `judged@10` (measures the pool) were selectable as tuning
+objectives, so tuning could have optimised the wrong direction (now restricted to `eval.metrics.OBJECTIVES`: nDCG@10, MAP, P@5,
+P@10, R@10); an unsatisfiable relevance floor, `--step 0`, an empty `--configs` and `--bootstrap 0` crashed with an
+`IndexError` or `ZeroDivisionError` instead of a usage message; a config without a relevance weight was accepted although
+candidates always come from `search()` (stub flags would have missed it); short or BOM-prefixed spreadsheet rows crashed the
+loaders; judge sheets now neutralise spreadsheet formulas in court text and round names cannot be paths. Tuning no longer
+rebuilds Results and explanations per grid point (`m4_rank.fusion.rank_ids`, columns normalised once), and `--tune` no longer
+collects the dev queries twice. The `ranking:` and `evaluation:` config sections are validated with clear messages
+(`m4_rank.weights.validate_ranking_config`).
+
+**Boundary with the other modules.** The branch initially edited `common/io.py` and `paths:` in `common/config.yaml`, which
+CLAUDE.md says to agree with the owners first. Both were reverted or moved: the table helpers (byte-order mark, short rows,
+atomic write) live in `eval/loaders.py`, and the judging folder is `evaluation.judging_dir`, a key in the M4-owned section. The
+only change under `common/` on this branch is that one key. Found but not changed, because it is outside M4's folder: an unused
+import in `common/contracts.py`.
 
 ## Open questions
 
