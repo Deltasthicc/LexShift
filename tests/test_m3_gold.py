@@ -88,3 +88,76 @@ def test_bad_label_in_a_sheet_is_rejected(tmp_path):
 def test_final_labels_prefers_adjudication():
     rows = [GoldWindow("w1", "[[A]]", "neutral", "L1"), GoldWindow("w1", "[[A]]", "followed", "L2"), GoldWindow("w1", "[[A]]", "followed", "ADJ")]
     assert final_labels(rows) == [("[[A]]", "followed")]
+
+
+def _round(tmp_path, n=6, double=3):
+    ms = [mention(i, f"[[C{i}]] text {i}.") for i in range(n)]
+    cands = sample_candidate_windows(n, seed=0, mentions=ms)
+    paths = write_sheets(cands, tmp_path, double=double)
+    l2_ids = [r["window_id"] for r in csv.DictReader(open(paths["L2"], encoding="utf-8"))]
+    return paths, [c["window_id"] for c in cands], l2_ids
+
+
+def _adjudicate_all(tmp_path, label="followed"):
+    dis = tmp_path / "disagreements.csv"
+    rows = list(csv.DictReader(open(dis, encoding="utf-8")))
+    for r in rows:
+        r["adjudicated"] = label
+    with open(dis, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["window_id", "window", "L1", "L2", "adjudicated"], lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    return dis.read_text(encoding="utf-8")
+
+
+def test_missing_second_sheet_is_refused_and_adjudications_survive(tmp_path):
+    from m3_treatment.gold import MergeError
+
+    paths, ids, l2 = _round(tmp_path)
+    fill(paths["L1"], {i: "neutral" for i in ids})
+    fill(paths["L2"], {i: "followed" for i in l2})
+    merge(tmp_path, tmp_path / "gold.csv")
+    typed = _adjudicate_all(tmp_path)
+    paths["L2"].unlink()
+    with pytest.raises(MergeError, match="missing"):
+        merge(tmp_path, tmp_path / "gold.csv")
+    assert (tmp_path / "disagreements.csv").read_text(encoding="utf-8") == typed  # untouched
+
+
+def test_merge_never_drops_a_typed_adjudication(tmp_path):
+    from m3_treatment.gold import MergeError
+
+    paths, ids, l2 = _round(tmp_path)
+    fill(paths["L1"], {i: "neutral" for i in ids})
+    fill(paths["L2"], {i: "followed" for i in l2})
+    merge(tmp_path, tmp_path / "gold.csv")
+    typed = _adjudicate_all(tmp_path)
+    fill(paths["L2"], {i: "neutral" for i in l2})  # the second labeller changed their sheet: no disagreement left
+    with pytest.raises(MergeError, match="typed adjudication"):
+        merge(tmp_path, tmp_path / "gold.csv")
+    assert (tmp_path / "disagreements.csv").read_text(encoding="utf-8") == typed
+
+
+def test_incomplete_sheets_are_refused_unless_allowed(tmp_path):
+    from m3_treatment.gold import MergeError
+
+    paths, ids, l2 = _round(tmp_path, n=8, double=2)
+    fill(paths["L1"], {ids[0]: "neutral"})  # 7 of 8 blank
+    fill(paths["L2"], {i: "neutral" for i in l2})
+    gold = tmp_path / "gold.csv"
+    with pytest.raises(MergeError, match="L1: 7 of 8 windows blank"):
+        merge(tmp_path, gold)
+    assert not gold.exists()
+    rep = merge(tmp_path, gold, allow_incomplete=True)
+    assert rep["blank_L1"] == 7 and rep["L1"] == 1
+
+
+def test_swapped_sheets_are_refused(tmp_path):
+    from m3_treatment.gold import MergeError
+
+    paths, ids, l2 = _round(tmp_path)
+    paths["L1"].rename(tmp_path / "x.csv")
+    paths["L2"].rename(paths["L1"])
+    (tmp_path / "x.csv").rename(paths["L2"])
+    with pytest.raises(MergeError):
+        merge(tmp_path, tmp_path / "gold.csv")

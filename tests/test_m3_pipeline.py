@@ -130,3 +130,66 @@ def test_scores_build_requires_the_build_verb(capsys):
     from m3_treatment.scores import main
 
     assert main([]) == 2
+
+
+def test_zero_shot_labels_are_not_reused_once_few_shot_examples_exist(project):
+    """Regression: the cache key ignored the few-shot examples, so labels made before the gold set existed stayed
+    zero-shot forever while the F1 table called them few-shot."""
+    from common.io import write_delimited
+    from m3_treatment import pipeline
+
+    pipeline.run_extract()
+    first = pipeline.run_label_llm(call=FakeLLM())
+    assert first["prompt"] == "zero-shot" and first["labelled"] > 0
+
+    # the gold set arrives: label every distinct window by hand (here: the same rule as the fake model)
+    windows = list(dict.fromkeys(m["marked_window"] for m in pipeline.load_mentions() if not m["is_self"]))
+    rule = lambda w: "overruled" if "overruled" in w.split("]]", 1)[1][:60] else "neutral"  # noqa: E731
+    gold_rows = [{"window_id": f"w{i}", "window": w, "gold_label": rule(w), "labeller": "L1"} for i, w in enumerate(windows)]
+    gold_path = project["paths"]["treatment_gold"]
+    write_delimited(gold_path, ("window_id", "window", "gold_label", "labeller"), gold_rows[:-1])
+
+    dry = pipeline.run_label_llm(dry_run=True)
+    assert dry["prompt"].endswith(")") and "shot" in dry["prompt"] and dry["prompt"] != "zero-shot"
+    assert dry["already_cached"] == 0  # nothing labelled zero-shot is reused under the few-shot prompt
+
+    pool = pipeline.fewshot_pool()
+    assert pool and (pipeline._pool_path()).exists()
+    write_delimited(gold_path, ("window_id", "window", "gold_label", "labeller"), gold_rows)  # more gold later
+    assert pipeline.fewshot_pool() == pool  # the frozen pool does not move, so the cache stays valid
+
+    seen = []
+
+    class Recording(FakeLLM):
+        def __call__(self, prompt):
+            seen.append("Labelled examples:" in prompt)
+            return super().__call__(prompt)
+
+    pipeline.run_label_llm(call=Recording())
+    assert seen and all(seen)  # every request carried the examples
+    ev = pipeline.run_evaluate()
+    assert ev["prompt"] == f"{len(pool)}-shot" and "skipped" not in ev["llm"]
+    assert f"LLM {len(pool)}-shot" in ev["markdown"]
+    assert pipeline.run_citations("llm")["records"] > 0
+
+
+def test_missing_bench_sizes_stop_the_build_loudly(project, capsys):
+    """Regression: without bench sizes no overruling could lower a score, and nothing said so."""
+    from m3_treatment import pipeline
+
+    no_bench = [{**j, "bench_size": None} for j in (KOUSHAL, NAVTEJ, COMMON_CAUSE, SMALL)]  # no coram line in these texts
+    write_jsonl(project["paths"]["judgments"], no_bench)
+    assert pipeline.main(["extract"]) == 1
+    err = capsys.readouterr().err
+    assert "[ERROR]" in err and "bench" in err
+    from m3_treatment.citations import main as citations_main
+
+    assert citations_main(["build"]) == 1  # the build stops instead of writing scores that cannot work
+
+    # run the remaining steps by hand anyway: health() says why nothing was lowered
+    pipeline.run_label_llm(call=FakeLLM())
+    pipeline.run_citations("llm")
+    rep = pipeline.run_health()
+    assert rep["lowered_health"] == {} and rep["negatives_not_counted"].get("unknown bench")
+    assert rep["warnings"] and "bench" in rep["warnings"][0]
+    assert "M1 data checks" in (pipeline._report_dir() / "resolution.md").read_text(encoding="utf-8")

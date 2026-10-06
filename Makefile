@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance docmeta download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility ui docmeta download build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -15,6 +15,8 @@ help:
 	@echo "qrels            reconcile the two judges into eval/qrels.tsv: make qrels ROUND=round1"
 	@echo "check-data       check the hand-made queries, qrels and gold list against the plan"
 	@echo "conformance      check M1, M2 and M3 artefacts and functions against the shared contracts"
+	@echo "feasibility      count what the corpus holds for each judged query (never a grade)"
+	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
 	@echo "download         M1: fetch the AWS Open Data judgments"
 	@echo "build-index      M1: judgments.jsonl and the search index"
@@ -53,6 +55,12 @@ check-data:
 
 conformance:
 	$(PY) -m eval.conformance
+
+feasibility:
+	$(PY) -m eval.feasibility $(ARGS)
+
+ui:
+	$(PY) -m app.server $(ARGS)
 
 docmeta:
 	$(PY) -m app.docmeta

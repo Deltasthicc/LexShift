@@ -1,6 +1,6 @@
 """The connections between modules, tested against the real code and, where it exists, the real data.
 
-These tests pin the integration fixes made when M1, M2 and M3 were merged with M4 (DECISIONS.md D-025) and they run the real
+These tests pin the integration fixes made when M1, M2 and M3 were merged with M4 (DECISIONS.md D-026) and they run the real
 M1 search over the corpus M1 committed. They skip, with a reason, when a dependency is missing (NLTK data, the committed index)
 instead of failing on a machine that has not got it.
 """

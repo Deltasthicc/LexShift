@@ -64,9 +64,23 @@ def test_same_parties_ignores_government_side_and_is_order_insensitive():
     assert not same_parties("Bachan Singh v. State of Punjab", "")
 
 
+def test_common_names_alone_are_not_the_same_dispute():
+    # Two different people called Ram Singh: before the fix this matched, and a real overruling would have been
+    # dropped as "appeal history".
+    assert not same_parties("Ram Singh v. State of Haryana", "Ram Singh v. State of U.P.")
+    assert not same_parties("Ram Lal v. State of U.P.", "State of U.P. v. Ram Lal")
+    w = "With respect, [[Ram Singh v. State of U.P. (1990) 2 SCC 1]] is overruled."
+    assert not is_appeal_history(w, "Ram Singh v. State of Haryana", "Ram Singh v. State of U.P.", cited_is_sc=True)
+    # the State's side is not a party name: two accused called Ram Singh, both prosecuted in Haryana
+    assert not same_parties("Ram Singh v. State of Haryana", "State of Haryana v. Ram Singh")
+    # a token frequent across the corpus (the resolver's stop list) is not distinctive either
+    assert same_parties("Karnail Bisoi v. State of Orissa", "State of Orissa v. Karnail Bisoi")
+    assert not same_parties("Karnail Bisoi v. State of Orissa", "State of Orissa v. Karnail Bisoi", common={"karnail", "bisoi"})
+
+
 def test_appeal_history_rules():
     # the earlier round of the same dispute
-    assert is_appeal_history("...", "Ram Lal v. State of U.P.", "State of U.P. v. Ram Lal", cited_is_sc=True)
+    assert is_appeal_history("...", "Dayanidhi Bisoi v. State of Orissa", "State of Orissa v. Dayanidhi Bisoi", cited_is_sc=True)
     # a High Court decision under appeal or set aside is a reversal, not an overruling
     w = "The two-Judge bench over-ruled the decision of the Delhi High Court in Naz Foundation, which was set aside."
     assert is_appeal_history(w, "Suresh Kumar Koushal v. Naz Foundation", "Naz Foundation v. Govt. of NCT of Delhi", cited_is_sc=False)

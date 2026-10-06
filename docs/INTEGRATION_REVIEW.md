@@ -25,11 +25,11 @@ and scaling tests are in `tests/test_robustness.py`; the connection tests are in
 |---|---|---|---|---|
 | **M1** | Boolean, phrase, proximity and BM25 ranking are correct (checked against brute force) | **No**: could not be imported on any other machine, returned hits the contract rejects, rejected every multi-word query | Yes | Data contract (dates, benches), zone splitter, build commands, tests, one parser bug, size |
 | **M2** | A minimal hour-0 extractor and parser: works for `IPC 302` and `Section 103 of the BNS` only | Switched itself on while its data file was missing, so the shared smoke gate failed | Switch set back to `true` | Most statute forms, bare-number resolution, offence ids, false positives, the mapping table |
-| **M3** | Complete against the Build Guide; runs end to end on real text | **No**: crashed on M1's date format; silently skipped exact-key resolution; could not read recent coram lines | Yes | Cache key, evidence choice, gold-set tooling, appeal-history heuristic, checks on M1's output |
+| **M3** | Complete against the Build Guide; runs end to end on real text; his review fixes (cache key, gold merge, same parties, data checks) were merged and re-verified on 2026-10-06 | As first pushed: **no** (crashed on M1's date format, silently skipped exact-key resolution, could not read recent coram lines) | Yes | Evidence choice and the lost marker, running headers, name extraction, then the real work: the hand-labelled gold set, the Gemini run, the F1 table and `doc_health.jsonl` for the corpus |
 | **M4** | Done (see section M4) | Yes | n/a | Hand-made queries and grades |
 
 Legend for the tables: **Fixed** means the fix is on `m4-rank` (the smallest edit that makes the connection work, listed in
-DECISIONS.md D-025 so the owner can take it or replace it); **Open** means the owner must act.
+DECISIONS.md D-026 so the owner can take it or replace it); **Open** means the owner must act.
 
 ---
 
@@ -47,7 +47,7 @@ DECISIONS.md D-025 so the owner can take it or replace it); **Open** means the o
 | 8 | Medium | `nltk` was not in `requirements.txt` and the stop-word corpus must be downloaded: a clean clone failed at import with a `LookupError` | **Fixed** (`nltk` declared, clear message, CI downloads it) |
 | 9 | Medium | The zone splitter hard-codes paragraph numbers (paragraphs 1-4 facts, 5-6 arguments, 12 and up holding, 7-11 in no zone; a comment says "for this judgment"). Text outside every zone is invisible to BM25: 3 of 66 matches for `murder` score exactly 0. For a long judgment `holding` is nearly the whole text, so zone weights mean little | **Open** |
 | 10 | Medium | The corpus cannot be rebuilt from the repo: `ingest.py`, `index.py` and `scoring.py` are still skeletons, so `make download` and `make build-index` print "not implemented". `parser.py` is byte-identical to `query_parser.py`, `text_tokenizer.py` to `tokenizer.py`. 90 MB of derived data (index, tokenised copy) is committed. No tests were committed | **Open** |
-| 11 | Medium | The sample is one year (2025). Older citations cannot resolve and no precedent can be overruled inside the corpus, so the treatment signal has nothing to find; the evaluation needs older cases. Control characters (`\x08`, `\x07`) are in all 200 texts (184 headnotes) | **Open**; M4 now strips them for display |
+| 11 | High | The sample is one year (2025), and it cannot support the evaluation: `python -m eval.feasibility` on the 25 example queries finds 2 answerable, 16 thin (3 or fewer judgments hold the words or the section) and 7 empty; section 103 is mentioned in one judgment and section 318 in none. Older citations cannot resolve and no precedent can be overruled inside the corpus, so the treatment signal has nothing to find; the evaluation needs older cases and more of them. Control characters (`\x08`, `\x07`) are in all 200 texts (184 headnotes) | **Open**; M4 now strips them for display |
 | 12 | Low | Scale: the index is 0.171 MB of JSON per judgment (measured), so about 5 GB at 30,000 judgments (an extrapolation), loaded into memory twice (`RankedSearchEngine` and `SearchEngine` each load it). The laptop-CPU requirement is at risk at full size | **Open** |
 
 **What to send M1**
@@ -58,7 +58,7 @@ DECISIONS.md D-025 so the owner can take it or replace it); **Open** means the o
 > (`[A, B and C, JJ.]`, with `*` marking the author) and never write 0, use null when unknown; every 3+ judge bench is currently
 > wrong; (3) make `parse_atom` raise `ValueError` at the end of input; (4) replace the hard-coded paragraph numbers in `zones.py`;
 > (5) implement `ingest.py` and `index.py` so `make build-index` rebuilds the corpus, stop committing the index and the tokenised
-> copy, and add tests; (6) add older judgments (the overruling cases) to the sample. Run `python -m eval.conformance --module m1`.
+> copy, and add tests; (6) grow the corpus in volume and in years, with the older judgments (the overruling cases): `python -m eval.feasibility` shows 2 of the 25 example queries answerable on the current 200 judgments of 2025. Run `python -m eval.conformance --module m1`.
 
 ---
 
@@ -90,31 +90,40 @@ DECISIONS.md D-025 so the owner can take it or replace it); **Open** means the o
 
 ## M3: citations and treatment
 
-Real-data results (203 judgments, stand-in labels): 8,896 mentions; 147 resolved to a corpus judgment (1.7%; 122 of the 4,761
-mentions that carry a Supreme Court reporter citation); 43 tagged appeal history (all unresolved); `health(Koushal)` is 0.1 with evidence from
-the 5-judge Navtej bench and no other judgment is lowered; `python -m eval.conformance --module m3` has 0 FAIL.
+**First pass** (M3's code as first pushed, 203 judgments, stand-in labels): 8,896 mentions; 147 resolved to a corpus judgment (1.7%; 122 of
+the 4,761 mentions that carry a Supreme Court reporter citation); 43 tagged appeal history (all unresolved); `health(Koushal)` is 0.1 with
+evidence from the 5-judge Navtej bench and no other judgment is lowered.
+
+**Second pass** (M3 pushed review fixes, DECISIONS.md D-024; merged into `m4-rank` and re-run on the same data): 147 of 9,215 mentions resolve
+(1.6%), 12 negative labels all pass the bench check, Koushal is still 0.1 and the only lowered judgment, and the new data checks report
+bench size, reporter citations and dataset-form ids known for 203 of 203 judgments. `python -m eval.conformance --module m3` has 0 FAIL and 0 WARN.
+Four of the nine first-pass findings are fixed and each was reproduced against the new code (findings 1 to 4); one regression was found (10).
 
 | # | Severity | Finding | State |
 |---|---|---|---|
-| 1 | High | The LLM cache key is `sha256(prompt version, model, window)` and omits the few-shot examples, although its docstring says everything that can change the answer is in the key. Labelling once without examples and again with them makes **zero new API calls** and keeps the first label (verified). Windows labelled before the gold set exists stay zero-shot forever, yet the F1 table would say "few-shot" | **Open** |
-| 2 | High | `gold merge` rewrites `disagreements.csv` from the current sheets on every run: if the second labeller's sheet is missing or empty the typed adjudications are wiped, and `treatment_gold.csv` shrinks, silently (verified). It also accepts a sheet with 247 of 250 windows blank without saying so, and writes non-atomically | **Open** |
-| 3 | Medium | `same_parties` treats different cases with a shared party name as one dispute (`Ram Singh v. State of Bihar` and `Ram Singh v. State of U.P.` is `True`): a real precedent edge would be tagged appeal history and dropped | **Open** |
-| 4 | High | Three silent dependencies on M1: the `doc_id` shape, `reporter_citations`, and bench sizes. All three were broken in the real data (see M1 6 and 7): the resolver silently skipped exact-key resolution, the coram reader read 0 of 122 recent coram lines, and it crashed on the date | **Fixed** (`_EN` suffix accepted, year read from any shape, mixed-case coram lines read). **Open**: report how many negatives the bench check discards and fail loudly when the corpus has no usable benches |
-| 5 | Medium | Evidence quality on real text: the window picked as evidence is the *headnote's "Case Law Cited" list* ("... Suresh Kumar Koushal ... [2013] 17 SCR 1019 - overruled Naz Foundation v. Govern...", "... Lalita Kumari ... - followed. List of Acts ...") rather than the sentence in the reasoning that overrules. Ties are broken by confidence, then citing id, not by how informative the window is | **Open** |
+| 1 | High | The LLM cache key omitted the few-shot examples: relabelling with examples made zero new API calls and kept the zero-shot label | **Fixed by M3** (the key carries a fingerprint of the examples; verified: after labelling zero-shot, adding one example makes a new call; the pool is frozen in `m3_fewshot_pool.csv`) |
+| 2 | High | `gold merge` rewrote `disagreements.csv` from the current sheets, so a missing second sheet wiped typed adjudications and shrank `treatment_gold.csv` silently | **Fixed by M3** (`MergeError` when a sheet is missing, swapped, has foreign windows or blank rows, or the merge would drop an adjudication; atomic writes; `--allow-incomplete`; verified with the second sheet missing) |
+| 3 | Medium | `same_parties("Ram Singh v. State of Bihar", "Ram Singh v. State of U.P.")` was `True` | **Fixed by M3** (government side ignored, a distinctive shared token required; verified `False`, and the same dispute with `& Ors.` still `True`) |
+| 4 | High | Three silent dependencies on M1: `doc_id` shape, `reporter_citations`, bench sizes | **Fixed** (my `resolver.py` edits are kept, merged with M3's `data_checks` and the report of negatives that did not count) |
+| 5 | Medium | Evidence quality on real text: the window kept as evidence is the *headnote's "Case Law Cited" list* ("... Suresh Kumar Koushal ... [2013] 17 SCR 1019 - overruled Naz Foundation ...") rather than the sentence in the reasoning that overrules; ties are broken by confidence, then citing id | **Open** (still true after the re-run: the Koushal evidence is the Shayara Bano headnote list) |
 | 6 | Low | Name extraction keeps neighbouring words (`A Constitution Bench in Bachan Singh v. State of Punjab`, `Ram Kishan Vs. State of Haryana the Court`, `Bench v. Bar` read as a case) and margin letters inside names (`Naz B Foundation`) | **Open** |
-| 7 | Low | Appeal-history tagging applies to non-Supreme-Court citations whose window contains `set aside`, `reversed` or `quashed`; a High Court decision cited for its holding is tagged. It cannot affect a score (a High Court case never resolves) but it inflates the statistic | **Open** |
-| 8 | Low | The evidence window loses its `[[ ]]` marker in `citations.jsonl`, so no consumer can find the treating sentence | **Open** |
+| 7 | Low | Appeal-history tagging applies to non-Supreme-Court citations whose window contains `set aside`, `reversed` or `quashed`; a High Court decision cited for its holding is tagged. It cannot affect a score but it inflates the statistic | **Open** |
+| 8 | Low | The evidence window loses its `[[ ]]` marker in `citations.jsonl` (0 of 9,215 windows keep it), so no consumer can find the treating sentence | **Open** |
 | 9 | Low | Memory and ergonomics: `run_health` loads every mention (with its window) into memory; `scores._table()` loads all evidence at the first call; commands print raw tracebacks when inputs are missing; `classify_llm` re-reads the cache per call; the Gemini model alias is not pinned | **Open** |
+| 10 | Medium | **New in the merged code.** Running headers that repeat the judgment's own title with the words that follow it (`Mahabir & Ors. v. State of Haryana Code of Criminal Procedure ...`) are no longer self-references: `_same_title` needs a Jaccard of 0.8 over all tokens, so they fall through to appeal history. Re-run: 662 appeal-history tags instead of 43 (374 of them look like the judgment's own title) and 319 more mentions in every count, so the resolution rate and the appeal-history statistic are distorted. No score changes (appeal history is excluded from health and authority) | **Open** |
+
+**What M3 has and has not finished.** The code is complete and tested. What is not done is data work that only M3 can do: the hand-labelled gold
+set (`data/treatment_gold.csv` has only its header), the Gemini run, the F1 table (`reports/classifier_f1.md`) and `doc_health.jsonl` /
+`citations.jsonl` for the corpus, so `stubs.health` and `stubs.authority` stay `true`. His README says he is waiting for M1's `judgments.jsonl`: it
+exists on `m1-index` (200 judgments, all 2025), so extraction can run now. It will find no overruling inside that sample (it needs older cases).
 
 **What to send M3**
-> The pipeline ran end to end on 203 real judgments and `doc_health.jsonl` passes the contract; with a stand-in labeller Koushal
-> comes out at 0.1 from the 5-judge Navtej bench. I changed `resolver.py` in three places (accept the `_EN` suffix in `doc_id`, read
-> the year from `02 January 2025`-style dates, read mixed-case coram lines like `[C.T. Ravikumar* and Sanjay Kumar, JJ.]`):
-> keep them or replace them. Please fix: (1) put the few-shot examples (or a hash of them) in the cache key and refuse to label
-> zero-shot silently; (2) make `gold merge` leave `disagreements.csv` alone when an input is missing and report unlabelled windows;
-> (3) prefer the reasoning sentence over a headnote citation list when choosing evidence, and keep the `[[ ]]` marker;
-> (4) tighten `same_parties`; (5) report negatives discarded by the bench check, by reason. Run
-> `python -m eval.conformance --module m3` after building.
+> I merged your review fixes (cache key, gold merge, same parties, data checks) and re-ran everything on 203 real judgments; I reproduced each fix
+> and they hold, thank you. Three things left in the code: (1) choose the reasoning sentence over a headnote "Case Law Cited" list as evidence and
+> keep the `[[ ]]` marker in `citations.jsonl`; (2) running headers with trailing words are no longer self-references (662 appeal-history tags
+> instead of 43): use a private-party-token test for `is_self` as well; (3) name extraction keeps neighbouring words. Then the data work: the
+> gold set with two labellers, the Gemini run, the F1 table, and `doc_health.jsonl` once M1 ships older judgments with ISO dates and correct
+> benches. Run `python -m eval.conformance --module m3` after building.
 
 ---
 
@@ -140,6 +149,6 @@ not how strong the match is (DECISIONS.md D-006); the judged queries, grades and
 
 1. M1: ISO dates, correct benches, a rebuild command, older judgments in the sample, then flip `stubs.search` once `smoke` passes.
 2. M2: the extractor fixes, then commit the sample's `doc_statutes.jsonl` and flip `stubs.statute`.
-3. M3: the cache key and gold-merge fixes, the Gemini run and the gold set, then build `doc_health.jsonl` and flip `stubs.health` and `stubs.authority`.
+3. M3: evidence choice and the running-header regression, the gold set and the Gemini run, then build `doc_health.jsonl` and flip `stubs.health` and `stubs.authority`.
 4. M4: with real modules on, write the queries, pool, grade, tune on dev, report on test.
 5. Everyone: `python -m eval.conformance` and `python eval/smoke.py` must be clean before merging to `main`.

@@ -233,7 +233,25 @@ When `doc_statutes.jsonl` (M2) exists, each negative evidence item carries the o
 `health(d, offence_ids)` then applies a negative only if those ids overlap the query's. An item with no known ids always
 applies. This is coarse: it uses the offences of the whole overruling judgment, not of the overruled point.
 
-### D-024 (2026-10-06) M3 merged into m4-rank and checked against M4
+### D-024 (2026-10-06) Review fixes in M3
+* **LLM cache and few-shot prompts.** The cache key now includes a fingerprint of the exact few-shot examples (or
+  `zero-shot`). Before, a label made before the gold set existed was reused under the few-shot prompt, and the F1 table
+  would have called it few-shot. The few-shot pool is drawn once and frozen in `data/labelling/m3_fewshot_pool.csv`, so
+  adding gold labels later does not change the prompt. The F1 report states the prompt actually used (zero-shot or N-shot).
+* **gold merge safety.** `merge` now refuses, writing nothing, when a sheet is missing, the sheets are swapped, the second
+  sheet has windows the first does not, a window is still blank (`--allow-incomplete` merges only the labelled rows), or
+  the merge would drop an adjudication already typed into `disagreements.csv`. Files are replaced atomically.
+* **Appeal history.** "Same parties" now compares only the non-government side ("State of Haryana" names the prosecutor,
+  not the dispute) and needs at least one shared distinctive token (not a common name such as Ram or Singh, not in the
+  corpus stop list). Before, "Ram Singh v. State of Haryana" and "Ram Singh v. State of U.P." counted as one dispute,
+  so a real overruling between them would have been dropped. Running headers are still recognised as self-references
+  by an exact-title test.
+* **Dependencies on M1.** `extract` reports how many judgments have a known bench, a parseable `reporter_citations` entry
+  and a dataset-form `doc_id`, in `reports/resolution.md` and on stderr. With no known bench at all it exits non-zero and
+  `citations build` stops, because then no negative treatment could lower any score. `health` reports negatives that
+  did not count and why (unknown bench or smaller citing bench).
+
+### D-025 (2026-10-06) M3 merged into m4-rank and checked against M4
 M3 arrived through a pull request merged into `main`; `main` was merged into `m4-rank`. The only conflicts were append-only
 (`DECISIONS.md`, `requirements.txt`) and were resolved by keeping both sides. M3 edited only its own `m3_treatment:` section of
 `common/config.yaml`. Findings are in [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md); they are for M3 to act on and
@@ -249,7 +267,7 @@ M4 did not change M3's code. What M4 changed, because the integration test showe
   (docs/CONTRACTS.md).
 `stubs.health` and `stubs.authority` stay `true`: `doc_health.jsonl` does not exist until M1's corpus does.
 
-### D-025 (2026-10-06) M1 and M2 merged; the four modules connected and checked together
+### D-026 (2026-10-06) M1 and M2 merged; the four modules connected and checked together
 `m1-index` and `m2-statute` were merged into `m4-rank` (no conflicts). All four modules were then run end to end on real judgments
 (M1's 200 plus three downloaded from the public bucket) and attacked with random and hostile input. Every finding, with the message to send
 each owner, is in [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md); `python -m eval.conformance` reproduces the data and API checks.
@@ -274,6 +292,37 @@ about placeholder ids; control characters are stripped from evidence and judge s
 
 Known failures are marked, not hidden: `tests/test_robustness.py` has two `xfail` tests (M2's quadratic `extract_refs`, M1's `IndexError`
 on `murder AND`); each turns into a pass when its owner fixes it.
+
+### D-027 (2026-10-06) The web interface, the judging workbench and the feasibility counter
+(Numbering note: M3's own D-024 reached `main` first, so the two integration entries above are D-025 and D-026.)
+
+* **Server.** Python standard library only (`http.server`), no framework, no build step, no new dependency: the live path stays offline
+  and the interface runs wherever the tests do. It binds to the loopback address, answers only to a loopback `Host` header (a web page
+  you happen to have open cannot reach it), accepts writes only as JSON from its own origin, caps the body at 64 KB, and serves nothing
+  outside `app/web/static`. The page's Content-Security-Policy allows no inline script or style and no other origin; the tests assert that
+  the shipped files contain no remote URL, no inline code and no `innerHTML`.
+* **No logic in the interface.** `app/service.py` calls `m4_rank` (`collect` once, then `fuse_collected` for B0, B1 and full), so the
+  screen cannot disagree with `rank()`, and one request serves all three configurations: switching is instant. A stub signal is reported
+  as a stub on every result, and when search is a stub every signal is (D-026).
+* **Wording and honesty.** The page never says "dead law" or "bad law" (a test scans the files), carries the not-legal-advice note, shows
+  evidence in full with its confidence, and says "stub run" on any `stub_*` result file. Dates are shown as stored (M1's `02 January 2025`
+  is not ISO yet).
+* **Design brief.** The visual direction followed the `gpt-taste` skill (editorial split hero, 2-line headline, a gapless 4 by 2 bento,
+  image scale-and-fade and card stacking, evidence carousel, marquee, inline pill in the headline, Outfit). Where the skill conflicts with the
+  project rules the rules won: no stock images (they are network fetches), so the artwork is generated SVG and CSS; no invented testimonials
+  or partners, so the carousel shows the treatment evidence of the current results and the marquee shows real judgment titles from the
+  index; and no GSAP, because vendoring it is a download and the demo must run offline, so the scroll motion is a small requestAnimationFrame
+  handler (`motion.js`) that writes CSS variables, switched off for visitors who prefer reduced motion. Outfit is used when installed and
+  the system font otherwise; bundling the font file and GSAP needs the owner's permission to download them.
+* **Judging workbench.** It writes only `judge1.csv` or `judge2.csv` in a round's folder, through the same atomic table writer as the
+  tools, refuses to touch a file that no longer matches the template, neutralises spreadsheet formulas in notes, and reads only
+  `sheet_template.csv`: never `provenance.csv`, scores, ranks or the other judge's file. It does not compute or show agreement (that would
+  let one judge see the other's grades) and it has no suggestion feature; `make_qrels` stays the only place agreement is reported.
+* **Feasibility counter (`python -m eval.feasibility`).** Judging queries are chosen before looking at results, but a query with nothing to
+  find in the corpus is wasted. The tool counts, from the real search and an independent regular expression over the text, how many
+  judgments hold each query's words and section numbers. It is a coverage check, never a grade, and refuses a stub search. **Measured
+  finding:** on M1's 200-judgment sample (all 2025) 2 of the 25 example queries are answerable, 16 are thin and 7 empty, so the corpus must
+  grow in volume and years before the query list is final (request to M1, in docs/INTEGRATION_REVIEW.md).
 
 ## Open questions
 

@@ -22,7 +22,7 @@ import sys
 from bisect import bisect_right, insort
 from dataclasses import dataclass, field
 
-from m3_treatment.text import party_tokens, split_parties
+from m3_treatment.text import COMMON_NAME_WORDS, party_tokens, split_parties
 
 # ----------------------------------------------------------------------------------------------------------------
 # Reporter citations
@@ -290,13 +290,6 @@ class Mention:
 
 _ATTACH_GAP = re.compile(r"^[\s,:]{0,4}$")
 _PARALLEL_GAP = re.compile(r"^[\s:=,]{0,5}$")
-# Common given names and surnames: too ambiguous to stand alone as a short form of a case name.
-COMMON_NAME_WORDS = frozenset(
-    """singh kumar lal ram devi prasad das khan ali ahmed ahmad mohd mohammad mohammed sharma gupta verma yadav reddy rao
-    nair pillai patel shah jain mishra tiwari pandey chand nath bai begum bibi sahu babu raj kumari rani shri sri
-    state union india court high supreme government board commissioner corporation bank company municipal council
-    limited private public society trust india's""".split()
-)
 _GOV_WORDS = frozenset("state union india government govt commissioner collector director secretary cbi".split())
 
 

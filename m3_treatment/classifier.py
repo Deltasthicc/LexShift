@@ -85,9 +85,21 @@ def valid_negative(label: str, citing_bench: int | None, cited_bench: int | None
 # ----------------------------------------------------------------------------------------------------------------
 # LLM (Gemini), offline and cached
 # ----------------------------------------------------------------------------------------------------------------
-def cache_key(model: str, marked_window: str) -> str:
-    """Everything that can change the answer is in the key: prompt version, model and the marked window."""
-    return hashlib.sha256(f"{PROMPT_VERSION}\x1f{model}\x1f{marked_window}".encode("utf-8")).hexdigest()
+ZERO_SHOT = "zero-shot"
+
+
+def shots_fingerprint(examples: Sequence["Example"]) -> str:
+    """"zero-shot", or "fs-<hash>" of the exact few-shot examples (windows and labels, in prompt order)."""
+    if not examples:
+        return ZERO_SHOT
+    blob = "\x1e".join(f"{ex.label}\x1f{ex.window}" for ex in examples)
+    return "fs-" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def cache_key(model: str, marked_window: str, shots: str = ZERO_SHOT) -> str:
+    """Everything that can change the answer is in the key: prompt version, model, the few-shot examples (their
+    fingerprint) and the marked window. A label made zero-shot is therefore never reused once examples exist."""
+    return hashlib.sha256(f"{PROMPT_VERSION}\x1f{model}\x1f{shots}\x1f{marked_window}".encode("utf-8")).hexdigest()
 
 
 class LLMCache:
@@ -202,6 +214,7 @@ class LLMLabeller:
     ):
         self.cache, self.model, self.call, self.examples = cache, model, call, list(examples)
         self.batch_size, self.min_interval_s, self.max_retries, self.sleep = batch_size, min_interval_s, max_retries, sleep
+        self.shots = shots_fingerprint(self.examples)
         self.calls = 0
         self._last = 0.0
 
@@ -209,7 +222,7 @@ class LLMLabeller:
         """Label every uncached window; returns how many were newly labelled. Failures raise after retries."""
         todo, seen = [], set()
         for w in marked_windows:
-            k = cache_key(self.model, w)
+            k = cache_key(self.model, w, self.shots)
             if k not in self.cache and k not in seen:
                 seen.add(k)
                 todo.append(w)
@@ -219,7 +232,15 @@ class LLMLabeller:
             results = self._call_with_retries(batch)
             self.cache.put_many(
                 [
-                    {"key": cache_key(self.model, w), "model": self.model, "prompt_version": PROMPT_VERSION, "label": lab, "confidence": conf}
+                    {
+                        "key": cache_key(self.model, w, self.shots),
+                        "model": self.model,
+                        "prompt_version": PROMPT_VERSION,
+                        "shots": self.shots,
+                        "n_examples": len(self.examples),
+                        "label": lab,
+                        "confidence": conf,
+                    }
                     for w, (lab, conf) in zip(batch, results)
                 ]
             )
@@ -333,9 +354,12 @@ def default_cache() -> LLMCache:
 
 
 def classify_llm(window: str) -> tuple[str, float]:
-    """(label, confidence) from the cached few-shot LLM run. Never calls the API; an uncached window is an error."""
+    """(label, confidence) from the cached LLM run with the current few-shot pool. Never calls the API; a window not
+    labelled under the current pool (or zero-shot when there is none) is an error."""
+    from m3_treatment.pipeline import few_shot_examples
+
     model = _m3_cfg().get("llm", {}).get("model", "gemini-2.5-flash")
-    row = default_cache().get(cache_key(model, window))
+    row = default_cache().get(cache_key(model, window, shots_fingerprint(few_shot_examples())))
     if row is None:
         raise KeyError("window not in the LLM cache; run `python -m m3_treatment.pipeline label-llm` offline first")
     return row["label"], float(row["confidence"])

@@ -38,7 +38,7 @@ full corpus (waiting for M1's `judgments.jsonl`), the hand-labelled gold set, th
 ## How to run (offline; only `label-llm` uses the network)
 
 ```bash
-python -m m3_treatment.pipeline extract          # judgments.jsonl -> data/processed/m3_mentions.jsonl + reports/resolution.md
+python -m m3_treatment.pipeline extract          # judgments.jsonl -> m3_mentions.jsonl + reports/resolution.md (checks M1 fields; exits 1 if no bench is known)
 python -m m3_treatment.gold sample --n 250 --double 60   # blank sheets in data/labelling/ -> label them by hand
 python -m m3_treatment.gold merge                # kappa, disagreements.csv, data/treatment_gold.csv
 python -m m3_treatment.pipeline label-llm --dry-run      # how many windows, requests and tokens
@@ -69,7 +69,7 @@ judgments.jsonl
 ## You hand over
 
 `citations.jsonl`, `doc_health.jsonl`, `treatment_gold.csv`, `health()`, `authority()`, and the classifier F1 table.
-Contract: [../docs/CONTRACTS.md](../docs/CONTRACTS.md). Decisions: D-016 to D-023 in [../DECISIONS.md](../DECISIONS.md).
+Contract: [../docs/CONTRACTS.md](../docs/CONTRACTS.md). Decisions: D-016 to D-024 in [../DECISIONS.md](../DECISIONS.md).
 
 ## IR concepts you explain in the video
 

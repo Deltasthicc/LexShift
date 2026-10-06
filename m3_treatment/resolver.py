@@ -117,14 +117,21 @@ class CorpusIndex:
         self.by_key: dict[str, set[str]] = {}
         self._ranges: dict[tuple[int, str], list[tuple[int, int, str]]] = {}
         titles: dict[str, set[str]] = {}
+        # coverage of the M1 fields M3 depends on (see data_checks)
+        self.coverage = {"docs": 0, "path_doc_id": 0, "reporter_key": 0, "bench_known": 0}
         for rec in judgments:
             doc_id = rec["doc_id"]
             year = year_of(rec.get("date"))
-            self.meta[doc_id] = DocMeta(doc_id, rec.get("title", ""), year, bench_of(rec))
-            for raw in rec.get("reporter_citations") or []:
-                for c in find_cites(raw):
-                    self.by_key.setdefault(c.key, set()).add(doc_id)
+            bench = bench_of(rec)
+            self.meta[doc_id] = DocMeta(doc_id, rec.get("title", ""), year, bench)
+            parsed = [c for raw in rec.get("reporter_citations") or [] for c in find_cites(raw)]
+            for c in parsed:
+                self.by_key.setdefault(c.key, set()).add(doc_id)
             m = _PATH_ID.match(doc_id)
+            self.coverage["docs"] += 1
+            self.coverage["path_doc_id"] += bool(m)
+            self.coverage["reporter_key"] += bool(parsed)
+            self.coverage["bench_known"] += bench is not None
             if m:
                 y, v, a, b = int(m["y"]), m["v"], int(m["a"]), int(m["b"])
                 self.by_key.setdefault(cite_key("SCR", y, v, str(a), False), set()).add(doc_id)
@@ -147,6 +154,36 @@ class CorpusIndex:
 
     def __contains__(self, doc_id: str) -> bool:
         return doc_id in self.meta
+
+    def data_checks(self, min_share: float = 0.5) -> list[tuple[str, str]]:
+        """(level, message) for each M1 field M3 depends on; level is OK, WARN or ERROR.
+
+        ERROR means the treatment signal cannot work at all (no known bench: no negative can pass the bench check, so
+        every health stays 1.0). WARN means resolution or the bench check will silently cover less of the corpus.
+        """
+        cov, n = self.coverage, max(1, self.coverage["docs"])
+        share = {k: cov[k] / n for k in ("path_doc_id", "reporter_key", "bench_known")}
+        pct = lambda k: f"{cov[k]}/{cov['docs']} ({100 * share[k]:.0f}%)"  # noqa: E731
+        out: list[tuple[str, str]] = []
+        if cov["bench_known"] == 0:
+            out.append(("ERROR", f"bench size known for {pct('bench_known')} judgments (bench_size, judges or a coram line): "
+                                 "the bench check can never pass, so no overruling or doubt can lower any health score"))
+        elif share["bench_known"] < min_share:
+            out.append(("WARN", f"bench size known for only {pct('bench_known')} judgments; negatives involving the rest are "
+                                "stored but never lower health. Ask M1 to fill bench_size"))
+        else:
+            out.append(("OK", f"bench size known for {pct('bench_known')} judgments"))
+        if share["reporter_key"] < min_share:
+            out.append(("WARN", f"only {pct('reporter_key')} judgments have a parseable reporter_citations entry; "
+                                "exact citation matching is limited and most resolution falls back to party names"))
+        else:
+            out.append(("OK", f"reporter_citations parseable for {pct('reporter_key')} judgments"))
+        if share["path_doc_id"] < min_share:
+            out.append(("WARN", f"only {pct('path_doc_id')} doc_ids have the dataset form <year>_<volume>_<first>_<last>; "
+                                "SCR page-range and doc_id-key resolution are off for the rest"))
+        else:
+            out.append(("OK", f"doc_id in the dataset form for {pct('path_doc_id')} judgments"))
+        return out
 
     # -- step 1 and 2 --------------------------------------------------------------------------------------------
     def resolve_cites(self, cites: list[Cite]) -> Resolution:

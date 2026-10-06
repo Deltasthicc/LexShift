@@ -92,3 +92,30 @@ where each concept is in the code.
 
 Libraries are allowed but must be explained in IR terms in the report: for example `rank_bm25` (M1) is used only as a
 sanity check against our own BM25, never in the live path.
+
+
+## The web interface
+
+`python -m app.server` serves one page and a small JSON API from the Python standard library, offline, on the loopback address.
+
+```
+browser  ->  app/server.py   routing, Host/Origin checks, CSP, static files
+                |
+             app/service.py  one method per screen; no ranking logic of its own
+                |-- m4_rank.rank.collect / fuse_collected   B0, B1 and full from one collection of signals
+                |-- app.docmeta, judgments.jsonl             titles, dates, benches, the judgment text
+                |-- eval.loaders, eval.check_data            the evaluation screen and the judging workbench
+                `-- common.providers                         real or stub per module, reported on every response
+```
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/compare?q=&date=&k=` | the top-k of B0, B1 and full, each result with its raw and normalised signals, contributions, reasons, evidence and its rank under every config |
+| `GET /api/search?q=&date=&k=&config=` | one configuration only |
+| `GET /api/status` | which modules are real or stub, the weights and their source, the data files, the corpus |
+| `GET /api/doc?id=` | one judgment's text, control characters stripped |
+| `GET /api/evaluation` | the evaluation data's state, the `check_data` findings, the ablation tables |
+| `GET /api/judge/rounds`, `/api/judge/sheet`; `POST /api/judge/grade` | the blind judging workbench (the only write) |
+
+Everything read from a judgment is inserted into the page as text, never as markup, and the Content-Security-Policy allows no inline
+script or style and no other origin. Stub signals are marked on every result. Decisions: DECISIONS.md D-027.

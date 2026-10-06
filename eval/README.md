@@ -10,6 +10,8 @@ worked examples, and the step-by-step commands).
 | `python -m eval.pool` | pools the top-20 of every system into a blind judge sheet (`eval/judging/<round>/`) |
 | `python -m eval.make_qrels` | reconciles the two judges, reports kappa, lists disagreements, writes `qrels.tsv` |
 | `python -m eval.check_data` | checks queries, qrels and the gold list against the plan |
+| `python -m eval.feasibility` | counts what the corpus holds for each query (coverage only, never a grade) |
+| `python -m app.server` | the web interface; its **Judging** screen is the blind two-judge workbench that writes `judge1.csv` and `judge2.csv` |
 | `python -m eval.run_ablation` | tunes on dev, evaluates, writes the table, per-query CSV and chart |
 | `python eval/smoke.py` | contract and end-to-end check (the merge gate) |
 
