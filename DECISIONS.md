@@ -95,6 +95,21 @@ updates, judgments from 1950 to 2025, raw JSON metadata, parquet metadata and zi
 parquet schema and field list, size, judgment count, whether judgments are PDFs or text, availability of citation metadata,
 how often BNS/BNSS appear, which citation formats occur, how often "overruled" appears in non-precedent senses.
 
+**M3 addendum (2026-10-06, from the bucket itself).** I listed the bucket over HTTPS and downloaded the 2013 and 2018
+parquet metadata and 9 English PDFs (Navtej Singh Johar, Joseph Shine, Suresh Kumar Koushal and 6 routine 2018 judgments).
+Findings:
+* Layout: `metadata/{json,parquet,tar}/year=YYYY/` and `data/{pdf,tar}/year=YYYY/english/<path>_EN.pdf`.
+* Parquet fields: `title, petitioner, respondent, description, judge, author_judge, citation, case_id, cnr, decision_date,
+  disposal_nature, court, available_languages, raw_html, path, nc_display, scraped_at, year`.
+* `citation` is the SCR citation (`[2018] 10 S.C.R. 1005`). `case_id` is the neutral citation (`2018 INSC 696`). `path`
+  is `<SCR year>_<volume>_<first page>_<last page>`: all 854 rows of 2013 match that pattern.
+* `judge` can list only the author. The "Bench : N Judges" text in `raw_html` was missing for every 2013 row.
+* The judgments are SCR-formatted PDFs. They contain margin letters A to H, the running heads "SUPREME COURT REPORTS"
+  and "[2018] 13 S.C.R.", a coram line ("[MADAN B. LOKUR, S. ABDUL NAZEER AND DEEPAK GUPTA, JJ.]"), a headnote with a
+  case-law list ("... (2014) 1 SCC 1 : [2013] 17 SCR 116 – overruled"), and footnote citations.
+* Citation formats seen: SCC, SCR (including Suppl.), SCC OnLine, AIR (Supreme Court and High Courts), SCALE, Cri LJ.
+  There was no INSC citation in the 2018 texts.
+
 ### D-012 (2026-10-06) How weights are tuned
 `python -m eval.run_ablation --tune` grid-searches the weight simplex of each multi-signal config (b1, full) on the DEV
 split only, objective mean nDCG@10. Grid step 0.1 (about ten dev queries would only fit noise on a finer grid); relevance
@@ -147,6 +162,77 @@ atomic write) live in `eval/loaders.py`, and the judging folder is `evaluation.j
 only change under `common/` on this branch is that one key. Found but not changed, because it is outside M4's folder: an unused
 import in `common/contracts.py`.
 
+### D-016 (2026-10-06) M3 treatment classifier: Gemini few-shot, offline and cached (closes D-008)
+The main classifier is Google Gemini through `google-genai`, model `m3_treatment.llm.model` (default `gemini-2.5-flash`),
+temperature 0, structured JSON output, 10 windows per request, prompt version `v1` (`m3_treatment/classifier.py`). Every
+answer is cached in `data/cache/m3_llm_labels.jsonl`, keyed by sha256(prompt version, model, marked window). Only
+`python -m m3_treatment.pipeline label-llm` calls the API (it needs `GEMINI_API_KEY`). `classify_llm()` and the demo path
+read frozen files only. By default the LLM labels only mentions resolved to a corpus judgment (`llm.scope: resolved`),
+because the others cannot move any score; the gold windows are always labelled. Few-shot examples come only from a
+held-out few-shot pool of the gold set (2 per class, chosen by hash), which is excluded from the F1 table. The baseline is
+tf-idf (word 1-2 grams over the whole window, plus a second tf-idf over 150 characters either side of the target) with
+class-balanced logistic regression, scored by stratified 5-fold cross-validation on the same evaluation windows.
+
+### D-017 (2026-10-06) citations.jsonl has one record per mention; unclassified mentions are explicit
+Each place a judgment refers to an earlier case is one record, so every window stays available as evidence. PageRank merges
+parallel edges by taking the largest weight, so a case mentioned 20 times does not vote 20 times. Self-references (running
+headers, the judgment's own citation) are dropped. Mentions outside the LLM scope (unresolved, or appeal history) get
+`label = neutral`, `confidence = 0.0`. Confidence 0 means "not classified": such a record has no corpus target, or is a
+reversal on appeal, so it can never change health or authority. Windows given to a classifier or a labeller mark the
+cited case with `[[ ]]`. citations.jsonl stores the window without the markers.
+
+### D-018 (2026-10-06) Short-form mentions are linked to the case they refer to
+Indian judgments usually treat a case through a short form: in Navtej Johar the overruling sentence is
+"Suresh Kumar Koushal (supra) needs to be, and is hereby, overruled", and later "The decision in Koushal stands overruled".
+The extractor links `supra` mentions to the latest earlier named mention containing their tokens, preferring one that
+carries a reporter citation. It links `alias` mentions (the petitioner side without "& Ors.", or its last word if that word
+has five or more letters and is not a common name such as Singh or Kumar) only to cases named earlier in the same judgment,
+and only in Title Case or UPPER CASE. Measured on Navtej Johar: all 26 "Koushal (supra)" mentions link to the cited full
+mention. Extraction time fell from 10.7s to 0.25s on that 850k-character judgment once alias search used a word-position
+index.
+
+### D-019 (2026-10-06) Resolver: exact keys first, page ranges only with an agreeing name, two-gate Jaccard
+Order: (1) an exact normalised reporter key from `reporter_citations` or the SCR key in the doc_id; (2) the SCR page range
+from the doc_id, accepted only when the mention names the case and the names agree (Jaccard >= 0.3); (3) party-name Jaccard
+with the year within +/- 1. Evidence for (2): the SCR prints Koushal as both `[2013] 17 SCR 116` (correct, per the metadata)
+and `[2013] 17 SCR 1019`, and page 1019 falls inside an unrelated judgment's range. Evidence for the two gates in (3): with
+only the stop-listed tokens, "Sushil Kumar v. State of Punjab" matched "Sushil Sharma v. State of NCT of Delhi". The score
+is now the Jaccard over all party tokens, and the stop-listed ("informative") tokens must also agree. The stop list is
+corpus driven: title tokens in more than 2% of titles, once they occur in at least 5. Near ties stay unresolved.
+
+### D-020 (2026-10-06) Bench size falls back to the coram line; an unknown bench never validates a negative
+The bench check is the Guide's rule: citing bench >= cited bench. It uses `bench_size` from M1, else `len(judges)` when more
+than one judge is listed, else the number of judges on the coram line in the first 6,000 characters of the text ("CJI" is a
+title, not another judge). Otherwise the bench is unknown, and a negative with an unknown bench on either side does not lower
+health (it is still stored). A single name is not trusted, because the dataset's `judge` field can be the author alone.
+Checked on the 9 downloaded judgments: Navtej 5, Joseph Shine 5, Koushal 2, M.A. Antony 3. **Request to M1:** fill
+`bench_size` from the coram line. Without bench sizes no overruling could pass the check.
+
+### D-021 (2026-10-06) M3 cleans PDF furniture before extraction; offsets refer to the cleaned text
+`m3_treatment.text.clean_text` drops margin letters, bare page numbers and the running heads, then joins wrapped lines.
+Left in, the running head "[2018] 11 S.C.R." glued onto the next paragraph number reads as a citation
+"[2018] 11 S.C.R. 62", which page-range resolution then mapped to a neighbouring judgment. This does not change M1's
+`text`. The sentence splitter treats "Ors." as never ending a sentence (merging a rare true boundary only enlarges a window).
+
+### D-022 (2026-10-06) health and authority details
+* health(d) = the strongest valid negative with confidence >= `m3_treatment.min_confidence` (0.5): overruled 0.1, doubted 0.6,
+  otherwise 1.0 (Guide).
+* Evidence: one item per (citing judgment, label), with valid negatives first and then up to the cap (`max_evidence` 5)
+  positive treatments from the largest benches. Extra keys `confidence`, `citing_bench` and, on negatives, `offence_ids`
+  sit next to the contract's `citing_doc, label, sentence`.
+* authority(d) = log(1 + N * PageRank(d) * bench_weight(d)) / max. PageRank is our own power iteration over `followed` and
+  `neutral` edges weighted by confidence, with damping 0.85, uniform redistribution of dangling mass, and parallel edges
+  merged by max. bench_weight = log(1 + bench) / log(1 + 7), capped at 1. An unknown bench uses 2 for this weight only.
+  Recency is not used anywhere (newer is not stronger). Known limitation: PageRank favours older judgments, which have
+  had more time to be cited.
+* Labelling rule: a window that reports what another court did to the target ("in X this Court overruled [[Y]]") is
+  `neutral`. That treatment is captured from X's own text when X is in the corpus.
+
+### D-023 (2026-10-06) Point-level health (stretch) uses the citing judgment's offences
+When `doc_statutes.jsonl` (M2) exists, each negative evidence item carries the offence ids of the citing judgment.
+`health(d, offence_ids)` then applies a negative only if those ids overlap the query's. An item with no known ids always
+applies. This is coarse: it uses the offences of the whole overruling judgment, not of the overruled point.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared
@@ -158,3 +244,7 @@ import in `common/contracts.py`.
 * **OQ-4** Whether a larger-bench reference or a stayed provision should show as its own treatment state in the demo (for
   example sedition, where the operation of the section was stayed rather than struck down). Needed for the limitation segment
   of the video; verify the facts against the orders first.
+* **OQ-5** How the frozen M3 outputs reach the team and CI. The Gemini cache (`data/cache/`) and `data/processed/` are
+  git-ignored, but `stubs.health` and `stubs.authority` can only be flipped to `false` once smoke (and CI) can read
+  `doc_health.jsonl`. Options: commit the LLM cache (small text, makes rebuilds free) or ship `doc_health.jsonl` with
+  M1's sample (OQ-1). M3 proposes committing the cache.
