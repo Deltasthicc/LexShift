@@ -1,0 +1,19 @@
+# LexShift: one shared requirements file, Python 3.11.
+# Rule: add a library HERE before you import it anywhere in the repo, and note in DECISIONS.md
+# what it does in IR terms if it touches retrieval, scoring or evaluation.
+
+# --- core (used by the shared skeleton) ---
+pyyaml>=6.0
+pytest>=8.0
+
+# --- planned, uncomment in the commit that first imports them ---
+# M1 (m1_index):      pandas, pyarrow          parquet metadata
+#                     pymupdf                  PDF -> text
+#                     nltk                     Porter stemmer only
+#                     awscli or boto3          public S3 bucket, unsigned
+#                     rank_bm25                sanity check against our own BM25 only, never in the live path
+# M3 (m3_treatment):  scikit-learn             tf-idf + logistic-regression baseline, Cohen's kappa
+#                     networkx                 PageRank (or implement power iteration ourselves)
+#                     an LLM client            offline few-shot labelling only, outputs cached, never at demo time
+# M4 (m4_rank, eval): matplotlib               report graphs
+#                     streamlit                optional thin demo page

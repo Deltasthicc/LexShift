@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Data: raw dumps and rebuilt corpora are never committed (reproduce with `make download` / `make build-*`).
+# A small shareable sample may live in data/sample/ (see DECISIONS.md, open question OQ-1).
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Cached LLM outputs and large model files (M3)
+data/cache/
+*.pt
+*.safetensors
+*.onnx
+
+# Outputs of runs that used stub providers are never results
+eval/results/stub_*
+
+# Notebooks scratch
+.ipynb_checkpoints/

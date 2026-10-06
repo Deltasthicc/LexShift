@@ -1,0 +1,13 @@
+# Normalise line endings so a mixed Windows/macOS/Linux team gets clean diffs.
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf
+Makefile text eol=lf
+*.pdf binary
+*.png binary
