@@ -25,7 +25,7 @@ def test_real_run_has_no_stub_banner_and_shows_breakdown_and_evidence(make_provi
     assert "STUB" not in out
     assert " 1. B   final 0.875" in out
     assert "rel    [" in out and "BM25 9.50" in out
-    assert 'evidence: overruled in Z: "placeholder sentence A"' in out
+    assert 'evidence: overruled in Z\n        "placeholder sentence A"' in out
     assert "overruled per Z" in out
     assert "bad law" not in out.lower() and "dead law" not in out.lower()
 
@@ -79,8 +79,36 @@ def test_text_from_other_modules_cannot_break_the_layout(make_providers, scenari
     assert "split\nacross" not in out
     # every line under a result is either a signal line or an evidence line, never a mangled fragment
     for line in out.splitlines():
-        if line.startswith("      ") and "evidence:" not in line:
-            assert line.split()[0] in ("rel", "cont", "health", "auth"), line
+        if line.startswith("      ") and not line.startswith("        ") and "evidence:" not in line:
+            assert line.split()[0] in ("rel", "cont", "health", "auth"), line  # evidence passages are indented further
+
+
+def test_evidence_is_wrapped_in_full_and_shows_confidence_and_bench_when_the_module_gives_them():
+    sentence = ("Alpha " * 40 + "is hereby overruled. " + "Omega " * 40).strip()
+    ev = {"citing_doc": "Z", "label": "overruled", "sentence": sentence, "confidence": 0.9312, "citing_bench": 5}
+    lines = cli.render_evidence(ev, width=60)
+    assert lines[0] == "      evidence: overruled in Z (confidence 0.93, 5-judge bench)"
+    body = " ".join(line.strip() for line in lines[1:])
+    assert body.startswith('"Alpha') and body.endswith('Omega"') and "is hereby overruled." in body  # nothing cut
+    assert all(len(line) <= 60 for line in lines[1:])
+    short = cli.render_evidence(ev, width=60, limit=50)
+    assert " ".join(x.strip() for x in short[1:]).endswith('..."')
+    plain = cli.render_evidence({"citing_doc": "Y", "label": "doubted", "sentence": "s"})
+    assert plain[0] == "      evidence: doubted in Y"  # the contract's three keys alone are enough
+
+
+def test_a_missing_artefact_from_a_provider_is_a_clear_message(make_providers, capsys):
+    from common.providers import Providers
+
+    good = make_providers()
+
+    def health_without_its_file(doc_id, offence_ids=None):
+        raise FileNotFoundError("doc_health.jsonl not found; build it with `python -m m3_treatment.scores build`")
+
+    broken = Providers(good.search, good.parse_query, good.continuity, health_without_its_file, good.authority, frozenset())
+    assert run(["murder"], broken) == 2
+    err = capsys.readouterr().err
+    assert "could not find its data" in err and "doc_health.jsonl not found" in err and "Traceback" not in err
 
 
 def test_render_survives_a_piece_that_is_not_a_signal_line():

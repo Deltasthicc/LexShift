@@ -39,7 +39,7 @@ from common.schema import Query  # noqa: E402
 from eval.loaders import (  # noqa: E402
     EvalDataError, judging_root, load_qrels, load_queries, valid_round_name, write_table,
 )
-from m4_rank.rank import Collected, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.rank import ArtefactError, Collected, ContractViolation, collect, fuse_collected, stubbed_groups  # noqa: E402
 from m4_rank.weights import canonical_config, format_weights, load_weights, signals_used  # noqa: E402
 
 SHEET_COLUMNS = ("qid", "query", "type", "offence_date", "doc_id", "title", "date", "bench_size", "excerpt", "grade", "note")
@@ -206,6 +206,17 @@ JUDGING_FILES = ("judge1.csv", "judge2.csv", "disagreements.csv")  # a round wit
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except ArtefactError as exc:
+        print(f"A module could not find its data: {exc}")
+        return 2
+    except ContractViolation as exc:
+        print(f"A module returned data that breaks its contract: {exc}")
+        return 3
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cfg = load_config()
     if not valid_round_name(args.round):

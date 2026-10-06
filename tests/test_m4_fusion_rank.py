@@ -176,6 +176,42 @@ def test_rank_rejects_bad_inputs(make_providers, args, kwargs):
         rank(*args, providers=make_providers(), **kwargs)
 
 
+@pytest.mark.parametrize("exc,detail", [(KeyError("'X' is not in doc_health.jsonl"), "'X' is not in doc_health.jsonl"),
+                                        (FileNotFoundError("index/ not found"), "index/ not found")])
+def test_missing_data_in_any_provider_becomes_one_clear_artefact_error(make_providers, exc, detail):
+    from common.providers import Providers
+    from m4_rank.rank import ArtefactError
+
+    good = make_providers()
+
+    def boom(*args, **kwargs):
+        raise exc
+
+    for name, replacement in {"search": boom, "parse_query": boom, "continuity": boom, "health": boom, "authority": boom}.items():
+        fields = {"search": good.search, "parse_query": good.parse_query, "continuity": good.continuity,
+                  "health": good.health, "authority": good.authority}
+        fields[name] = replacement
+        broken = Providers(**fields, stubbed=frozenset())
+        with pytest.raises(ArtefactError) as info:
+            rank("q", None, k=2, config="full", providers=broken)
+        assert detail in str(info.value) and name.replace("parse_query", "parse_query") in str(info.value).replace("()", "")
+        assert isinstance(info.value.__cause__, type(exc))
+
+
+def test_a_real_bug_that_is_not_missing_data_is_not_disguised(make_providers):
+    from common.providers import Providers
+
+    good = make_providers()
+
+    def buggy(doc_id, offence_ids=None):
+        return {}["no such key in my own code"]  # a KeyError from a genuine bug still surfaces, wrapped with its origin
+
+    broken = Providers(good.search, good.parse_query, good.continuity, buggy, good.authority, frozenset())
+    with pytest.raises(Exception) as info:
+        rank("q", None, k=2, config="full", providers=broken)
+    assert isinstance(info.value.__cause__, KeyError) and "health(" in str(info.value)  # the call site is always named
+
+
 def test_rank_raises_when_a_provider_breaks_its_contract(make_providers, scenario):
     scenario["A"]["health"] = 1.5
     with pytest.raises(ContractViolation, match="health"):

@@ -28,7 +28,7 @@ from common.schema import Query  # noqa: E402
 from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries  # noqa: E402
 from eval.metrics import METRIC_NAMES, OBJECTIVES, aggregate, evaluate_query, paired_bootstrap  # noqa: E402
 from eval.tuning import TuningError, save_tuned, tune_config  # noqa: E402
-from m4_rank.rank import Collected, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.rank import ArtefactError, Collected, ContractViolation, collect, fuse_collected, stubbed_groups  # noqa: E402
 from m4_rank.weights import (  # noqa: E402
     SIGNALS, active_signals, canonical_config, format_weights, load_weights, signals_used, weights_source,
 )
@@ -209,6 +209,17 @@ def write_outputs(
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except ArtefactError as exc:
+        print(f"A module could not find its data: {exc}")
+        return 2
+    except ContractViolation as exc:
+        print(f"A module returned data that breaks its contract: {exc}")
+        return 3
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cfg = load_config()
     if args.bootstrap < 1:

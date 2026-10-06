@@ -25,7 +25,7 @@ from common.config import load_config  # noqa: E402
 from common.providers import Providers, load_providers  # noqa: E402
 from common.schema import Result  # noqa: E402
 from m4_rank.explain import split_explanation  # noqa: E402
-from m4_rank.rank import ContractViolation, rank  # noqa: E402
+from m4_rank.rank import ArtefactError, ContractViolation, rank  # noqa: E402
 from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights, weights_source  # noqa: E402
 
 BAR_WIDTH = 20
@@ -46,7 +46,27 @@ def banner(stubbed: list[str]) -> str:
             "This output is NOT a result. ***")
 
 
-def render(results: list[Result], meta: dict) -> str:
+def render_evidence(ev: dict, width: int = 108, limit: int | None = None) -> list[str]:
+    """One evidence item: who treated the case and how, then the quoted passage wrapped in full.
+
+    The passage is M3's citation window (up to three sentences); the sentence that actually carries the treatment is usually
+    the middle one, so it is shown in full unless the reader asks for a shorter excerpt with --evidence-chars.
+    M3's optional keys (confidence, citing bench) are shown when present.
+    """
+    extras = []
+    if isinstance(ev.get("confidence"), (int, float)):
+        extras.append(f"confidence {ev['confidence']:.2f}")
+    if ev.get("citing_bench"):
+        extras.append(f"{ev['citing_bench']}-judge bench")
+    head = f"      evidence: {ev['label']} in {ev['citing_doc']}" + (f" ({', '.join(extras)})" if extras else "")
+    text = " ".join(str(ev["sentence"]).split())
+    if limit is not None and len(text) > limit:
+        text = textwrap.shorten(text, width=limit, placeholder=" ...")
+    body = textwrap.wrap(f'"{text}"', width=width, initial_indent="        ", subsequent_indent="        ")
+    return [head, *body]
+
+
+def render(results: list[Result], meta: dict, evidence_chars: int | None = None) -> str:
     lines: list[str] = []
     for i, r in enumerate(results, start=1):
         label = describe(meta.get(r.doc_id))
@@ -58,8 +78,7 @@ def render(results: list[Result], meta: dict) -> str:
             else:  # never trust text that came from another module to look like a signal line
                 lines.append(f"      {piece}")
         for ev in r.evidence:
-            quoted = textwrap.shorten(ev["sentence"], width=220, placeholder=" ...")
-            lines.append(f"      evidence: {ev['label']} in {ev['citing_doc']}: \"{quoted}\"")
+            lines.extend(render_evidence(ev, limit=evidence_chars))
         lines.append("")
     return "\n".join(lines)
 
@@ -70,6 +89,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--offence-date", help="date of the offence (YYYY-MM-DD): decides IPC (before 2024-07-01) or BNS")
     ap.add_argument("--config", default="full", help="b0 (BM25 only), b1 (+continuity) or full (default)")
     ap.add_argument("-k", type=int, default=10, help="results to show (default 10)")
+    ap.add_argument("--evidence-chars", type=int, metavar="N", help="shorten each evidence passage to about N characters "
+                    "(default: show it in full; it is the evidence)")
     ap.add_argument("--verbose", action="store_true", help="also show the query parse, weights and raw signals")
     ap.add_argument("--json", action="store_true", help="print results as JSON on stdout")
     return ap.parse_args(argv)
@@ -81,7 +102,7 @@ def describe_query_statutes(args: argparse.Namespace, providers: Providers, used
         return "query statutes: not used by this config"
     try:
         qs = providers.parse_query(args.query, args.offence_date)
-    except NotImplementedError as exc:
+    except (NotImplementedError, KeyError, FileNotFoundError) as exc:
         return f"query statutes: unavailable ({exc})"
     refs = ", ".join(f"{r.act} {r.section}" + (f" -> {r.offence_id}" if r.offence_id else "") for r in qs.refs) or "none found"
     lines = [f"query statutes: governing act {qs.governing_act or 'unknown'}; sections: {refs}"]
@@ -106,6 +127,9 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
     except ContractViolation as exc:
         print(f"A module returned data that breaks its contract: {exc}", file=sys.stderr)
         return 3
+    except ArtefactError as exc:
+        print(f"A module could not find its data: {exc}", file=sys.stderr)
+        return 2
     except ValueError as exc:
         print(f"Invalid input: {exc}", file=sys.stderr)
         return 2
@@ -134,7 +158,7 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
     if not results:
         print("No results.")
     else:
-        print(render(results, meta))
+        print(render(results, meta, args.evidence_chars))
         if args.verbose:
             print("raw signals before normalisation:")
             for r in results:

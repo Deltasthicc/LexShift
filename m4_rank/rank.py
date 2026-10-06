@@ -29,6 +29,22 @@ class ContractViolation(RuntimeError):
     """A provider (M1, M2 or M3 function) returned something that breaks its contract in docs/CONTRACTS.md."""
 
 
+class ArtefactError(RuntimeError):
+    """A provider could not find the data it serves from: a missing file, or a document id its artefact does not cover.
+
+    Typically the index and `doc_health.jsonl` were built from different corpus versions, or a build step was not run.
+    """
+
+
+def _call(where: str, fn, *args):
+    """Call a provider; turn 'missing file or id' failures into one clear, catchable error naming the call."""
+    try:
+        return fn(*args)
+    except (KeyError, FileNotFoundError) as exc:
+        detail = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
+        raise ArtefactError(f"{where}: {detail} ({type(exc).__name__}; rebuild the module's artefacts and try again)") from exc
+
+
 @dataclass
 class Collected:
     """Raw signals for one query: everything needed to fuse under any weights without calling the providers again."""
@@ -76,25 +92,25 @@ def collect(
     n = candidates or int(cfg["ranking"]["candidates"])
     wanted = tuple(s for s in SIGNALS if s == "rel" or s in signals)
 
-    hits = providers.search(query, k=n)
+    hits = _call("search()", providers.search, query, n)
     _enforce(contracts.check_hits(hits, n), "search()")
     rows = [SignalRow(doc_id=h.doc_id, raw={"rel": float(h.rel)}) for h in hits]
 
     qs: QueryStatutes | None = None
     if "cont" in wanted or "health" in wanted:
-        qs = providers.parse_query(query, offence_date)
+        qs = _call("parse_query()", providers.parse_query, query, offence_date)
         _enforce(contracts.check_query_statutes(qs), "parse_query()")
     for row in rows:
         if "cont" in wanted:
-            out = providers.continuity(qs, row.doc_id)
+            out = _call(f"continuity({row.doc_id})", providers.continuity, qs, row.doc_id)
             _enforce(contracts.check_continuity(out), f"continuity({row.doc_id})")
             row.raw["cont"], row.cont_why = float(out[0]), out[1]
         if "health" in wanted:
-            out = providers.health(row.doc_id, (qs.offence_ids or None) if qs else None)
+            out = _call(f"health({row.doc_id})", providers.health, row.doc_id, (qs.offence_ids or None) if qs else None)
             _enforce(contracts.check_health(out), f"health({row.doc_id})")
             row.raw["health"], row.evidence = float(out[0]), list(out[1])
         if "auth" in wanted:
-            value = providers.authority(row.doc_id)
+            value = _call(f"authority({row.doc_id})", providers.authority, row.doc_id)
             _enforce(contracts.check_authority(value), f"authority({row.doc_id})")
             row.raw["auth"] = float(value)
 
