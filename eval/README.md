@@ -14,6 +14,8 @@ worked examples, and the step-by-step commands).
 | `python -m app.server` | the web interface; its **Judging** screen is the blind two-judge workbench that writes `judge1.csv` and `judge2.csv` |
 | `python -m eval.run_ablation` | tunes on dev, evaluates, writes the table, per-query CSV and chart |
 | `python eval/smoke.py` | contract and end-to-end check (the merge gate) |
+| `python -m eval.submission_check` | audits the submission checklist: stubs, queries, qrels, results, wording, secrets, size, documents (`--run` adds the tests and the demo) |
+| `python -m eval.figures` | draws the pipeline diagram for the report (`docs/figures/pipeline.png` and `.svg`) |
 
 ## Systems compared
 

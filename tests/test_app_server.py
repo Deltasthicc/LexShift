@@ -424,19 +424,21 @@ def test_every_script_parses_when_node_is_available():
 
 
 def test_the_vendored_libraries_are_the_files_the_provenance_note_describes():
-    """GSAP and the Outfit font were copied unmodified from their npm packages; the note records each file's SHA-256."""
+    """GSAP and the Outfit and Geist fonts were copied unmodified from their npm packages; the note records each file's SHA-256."""
     import hashlib
 
     static = WEB / "static"
     note = (static / "vendor" / "README.md").read_text(encoding="utf-8")
     files = ["vendor/gsap/gsap.min.js", "vendor/gsap/ScrollTrigger.min.js", "vendor/gsap/ScrollToPlugin.min.js", "vendor/gsap/Flip.min.js",
-             "fonts/outfit-latin-wght-normal.woff2", "fonts/outfit-latin-ext-wght-normal.woff2"]
+             "fonts/outfit-latin-wght-normal.woff2", "fonts/outfit-latin-ext-wght-normal.woff2",
+             "fonts/geist-latin-wght-normal.woff2", "fonts/geist-latin-ext-wght-normal.woff2"]
     for rel in files:
         path = static / rel
         assert path.is_file(), f"{rel} is missing"
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         assert digest in note, f"{rel} does not match the SHA-256 recorded in static/vendor/README.md (edited or replaced?)"
-    assert "SIL Open Font License" in (static / "fonts" / "OFL.txt").read_text(encoding="utf-8")
+    for licence in ("OFL.txt", "OFL-Geist.txt"):
+        assert "SIL Open Font License" in (static / "fonts" / licence).read_text(encoding="utf-8")
     assert "GSAP 3." in (static / "vendor" / "gsap" / "gsap.min.js").read_text(encoding="utf-8")[:200]
 
 
@@ -451,13 +453,17 @@ def test_the_page_loads_gsap_before_its_own_code_and_declares_the_font():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     assert html.index("gsap.min.js") < html.index("ScrollTrigger.min.js") < html.index("ScrollToPlugin.min.js") < html.index("Flip.min.js") < html.index("/static/js/main.js")
     css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
-    assert css.count("@font-face") == 2 and "/static/fonts/outfit-latin-wght-normal.woff2" in css and "font-src 'self'" in __import__("app.server", fromlist=["CSP"]).CSP
+    assert css.count("@font-face") == 4 and "/static/fonts/geist-latin-wght-normal.woff2" in css and "/static/fonts/outfit-latin-wght-normal.woff2" in css
+    assert "font-src 'self'" in __import__("app.server", fromlist=["CSP"]).CSP
+    stack = re.search(r"--font:\s*([^;]+);", css).group(1)
+    assert stack.index('"Geist"') < stack.index('"Outfit"'), "Geist is the first choice, Outfit the bundled fallback"
 
 
 def test_the_server_serves_the_vendored_files_with_the_right_types(live):
     for path, ctype in (("/static/vendor/gsap/gsap.min.js", "text/javascript"), ("/static/vendor/gsap/ScrollTrigger.min.js", "text/javascript"),
                         ("/static/vendor/gsap/Flip.min.js", "text/javascript"), ("/static/vendor/gsap/ScrollToPlugin.min.js", "text/javascript"),
-                        ("/static/fonts/outfit-latin-wght-normal.woff2", "font/woff2")):
+                        ("/static/fonts/outfit-latin-wght-normal.woff2", "font/woff2"),
+                        ("/static/fonts/geist-latin-wght-normal.woff2", "font/woff2"), ("/static/fonts/geist-latin-ext-wght-normal.woff2", "font/woff2")):
         status, resp, raw = live.request("GET", path)
         assert status == 200 and resp.getheader("Content-Type").startswith(ctype) and len(raw) > 3_000, path
 
@@ -488,3 +494,11 @@ def test_the_hero_is_hidden_from_first_paint_with_a_failsafe_and_no_section_clip
 def test_the_page_has_no_remaining_reveal_class_that_hides_content_by_css():
     css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
     assert ".reveal" not in css, "content is hidden by the script only, so a script that fails leaves it visible"
+
+
+def test_a_link_that_carries_a_query_runs_in_the_tab_that_is_already_open():
+    """Pasting a shared link (or going back) changes only the hash: it must run that search, not be ignored after the first load."""
+    main = (WEB / "static" / "js" / "main.js").read_text(encoding="utf-8")
+    search = (WEB / "static" / "js" / "search.js").read_text(encoding="utf-8")
+    assert "export function paramsDiffer" in search and "paramsDiffer" in main
+    assert "applyParams(params, { scroll: true })" in main

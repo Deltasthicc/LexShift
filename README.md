@@ -115,6 +115,10 @@ python -m pytest            # unit tests
 python eval/smoke.py        # contract + end-to-end check; the merge gate for main
 ```
 
+If `python -m nltk.downloader stopwords` stops with `Path traversal blocked` and `EOFError`, your user data folder is redirected (this happens in
+the shell of some desktop apps): run that one command from an ordinary Windows Terminal or PowerShell window instead. It is a one-time download into
+your user profile; the tests and the demo read the list from there.
+
 `make test` and `make smoke` do the same if you have `make`. Every Makefile target is a plain Python command, listed in
 the next section.
 
@@ -143,6 +147,8 @@ such as `search,health`.
 | `make check-data` | `python -m eval.check_data` | M4 |
 | `make feasibility` | `python -m eval.feasibility` | M4 |
 | `make ui` | `python -m app.server` | M4 |
+| `make final-check` | `python -m eval.submission_check` | M4 |
+| `make figures` | `python -m eval.figures` | M4 |
 | `make conformance` | `python -m eval.conformance` | all |
 
 The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
@@ -256,7 +262,7 @@ a test query), and with no queries or judgements it says so instead of printing 
 
 ## Status
 
-*Last updated 2026-10-06 (M1, M2 and M3 merged into `m4-rank` and run together on real judgments: [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md)).
+*Last updated 2026-10-07 (M1, M2 and M3 merged into `m4-rank` and run together on real judgments: [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md)).
 This table is the honest state of the project; each owner updates their row when they merge.*
 
 | Module | State on `main` |
@@ -265,7 +271,7 @@ This table is the honest state of the project; each owner updates their row when
 | M1 corpus, index and `search()` | **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked. **Not done:** the corpus cannot be rebuilt (`ingest.py` and `index.py` are skeletons), `judgments.jsonl` breaks the `Judgment` contract (non-ISO dates, wrong bench sizes), no tests; so `stubs.search` stays `true`. Needs older judgments in the sample |
 | M2 statute layer | **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
 | M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), its review fixes (cache key, gold merge, same parties, data checks) are merged and were re-verified; run end to end on 203 real judgments (a stand-in labeller, since there are no Gemini labels or gold set yet) and checked against M4's `rank()` and demo: Koushal comes out overruled by the 5-judge Navtej bench. **Not done:** the real labelling run, the gold set, the F1 table, a built `doc_health.jsonl` for the corpus; so `stubs.health` and `stubs.authority` stay `true` |
-| M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker, the feasibility counter, the CLI demo and the web interface (search, compare, evidence, status, evaluation and a blind judging workbench) are implemented and unit-tested against fixtures and the stubs, and the interface was checked in a browser on the 200-judgment sample; report skeleton, video script and submission checklist are drafted (branch `m4-rank`; skeleton only on `main` until it is merged) |
+| M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker, the feasibility counter, the CLI demo and the web interface (search, compare, evidence, status, evaluation and a blind judging workbench) are implemented and unit-tested against fixtures and the stubs, and the interface was checked in a browser on the 200-judgment sample; the report skeleton and a prose draft, the pipeline diagram (`python -m eval.figures`), the video script and the submission checklist are written, and `python -m eval.submission_check` audits the checklist's machine-checkable items (branch `m4-rank`; skeleton only on `main` until it is merged). What remains for M4 is data that only people can make: the judged queries, the two judges' grades and the gold overruling list, then tuning on dev and the test table, the report PDF and the video |
 | Judged queries and qrels | **Not written yet: they are made by hand.** Example queries, rules, the query worksheet and the tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)). `python -m eval.feasibility` shows that the current 200-judgment sample (all 2025) cannot support the plan: of the 25 example queries 2 are answerable, 16 thin and 7 empty, so the corpus has to grow first |
 
 No retrieval-quality result has been measured yet, so none is claimed here. The unit tests check the arithmetic against
@@ -287,6 +293,9 @@ hand-computed values on small synthetic fixtures; they say nothing about how wel
 | [docs/CONTRACTS.md](docs/CONTRACTS.md) | Function signatures, file formats, vocabularies, the stub wiring |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | Branches, merge rules, the 36-hour plan |
 | [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md) | Writing the queries and grades by hand: worksheet, grading rules and worked examples, the workbench, the pooling and qrels tools |
+| [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | What to tick before submitting; `python -m eval.submission_check` checks the machine-checkable items |
+| [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md), [docs/REPORT_DRAFT.md](docs/REPORT_DRAFT.md) | The report's structure, and the prose that can be written before the evaluation exists (every result is a `<FILL>` from a file) |
+| [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The demo video, segment by segment, with the live commands |
 | [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md) | The four modules run together on real judgments: findings per module and what to send each owner |
 | [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md) | The 8-page report, section by section, with where each number comes from |
 | [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The 5 to 8 minute video: segments, live commands, recording checklist |

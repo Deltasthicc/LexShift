@@ -361,6 +361,26 @@ line and a request indicator, magnetic buttons and a pointer-following glow on t
 document with `j`, `k` and `n`. Measured here: the structure, states and behaviour in a browser pane at phone, tablet and desktop widths. Not measured:
 frame rate on the owner's machine (the pane throttles animation frames, so timing could not be profiled).
 
+### D-029 (2026-10-07) Geist bundled; a submission audit, the pipeline figure and a report draft
+* **Geist.** The owner approved the download (supersedes the "not bundled" clause of D-028). `@fontsource-variable/geist` 5.3.0 was fetched with `npm pack`
+  and its Latin and Latin Extended variable files copied unmodified to `app/web/static/fonts/` with the SIL OFL text; hashes are in
+  `app/web/static/vendor/README.md` and a test checks them. Outfit stays as the bundled fallback. Geist Mono was not downloaded (ids and code use the
+  system monospace font). Geist's default spacing is tighter than Outfit's, so the display letter-spacing was loosened (headline `-0.04em` to `-0.03em`,
+  the closing call to action `-0.045em` to `-0.034em`) after the first render showed glyphs touching.
+* **`eval/submission_check.py`.** One command for the machine-checkable items of the submission checklist, with four levels: PASS, TODO (not done yet),
+  FAIL (a rule is broken) and MANUAL. It reads files only and makes no number. A folder that is merely inside another repository is treated as not a
+  repository (found by its own test, because the test folders live under the checkout). On this branch it reports no FAIL; the TODOs are exactly the
+  data and steps that need people (the real providers, the judged queries, qrels, gold list, the agreement report, the tuned weights, the result files,
+  and the AI-log entries whose human review is still pending).
+* **`eval/figures.py`.** The pipeline diagram from ARCHITECTURE.md as `docs/figures/pipeline.png` and an editable `.svg`, drawn by code so it can be regenerated;
+  it carries no measured number (a test checks).
+* **`docs/REPORT_DRAFT.md`.** The report prose that does not depend on results (problem, IR concept table with files, libraries in IR terms, beyond IR,
+  limitations, AI-use declaration), with a `<FILL: file>` wherever a number, a measured fact or an owner's input is needed. No claim about retrieval
+  quality is made; the novelty claims are labelled as design claims until section 5 supports them.
+* **What is not done, and why.** The judged queries, the two judges' grades and the gold overruling list are made by hand and are not written; the corpus (200
+  judgments, all 2025) cannot support the plan until M1 grows it (D-027); M2 and M3 still have their real functions off, so the evaluation runner
+  refuses to produce results. The test-set table, the report PDF and the video follow those.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

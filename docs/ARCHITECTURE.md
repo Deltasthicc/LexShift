@@ -34,6 +34,8 @@ flowchart LR
   H -.-> R3
 ```
 
+The same diagram as an image for the report: `docs/figures/pipeline.png` and `.svg` (`python -m eval.figures`).
+
 Nothing in the live path calls the network, a paid API or a language model. Anything that needed a GPU or an LLM
 (classifier training or few-shot labelling) ran offline and its outputs are frozen files.
 

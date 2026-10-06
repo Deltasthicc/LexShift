@@ -1,6 +1,8 @@
 # Report skeleton (PDF, 8 pages or fewer excluding references and appendix)
 
 Follows the structure the assignment requires. Every `<FILL: ...>` is for the team to complete **from a file in this repository**.
+[REPORT_DRAFT.md](REPORT_DRAFT.md) already holds the prose that does not depend on results; the pipeline diagram is `docs/figures/pipeline.png`
+(`python -m eval.figures`).
 Do not write a number that is not in `eval/results/`, a module's output file, or the logs: an unmeasured claim costs more than
 a missing one. Where the system does not help, say so; the rubric asks for a judged comparison, not a win.
 

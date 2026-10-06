@@ -588,7 +588,15 @@ export function focusQuery() {
   window.setTimeout(() => els.q.focus({ preventScroll: true }), 500);
 }
 
-export function applyParams(params) {
+// A link that carries a query (pasted into this tab, or reached with back and forward) differs from what is on screen.
+export function paramsDiffer(params) {
+  const q = params.get("q");
+  if (!q) return false;
+  const mode = params.get("mode") === "compare" ? "compare" : "ranked";
+  return q !== state.query || (params.get("date") || "") !== state.date || mode !== state.mode;
+}
+
+export function applyParams(params, { scroll = false } = {}) {
   const q = params.get("q");
   if (!q) return false;
   els.q.value = q;
@@ -596,7 +604,7 @@ export function applyParams(params) {
   state.mode = params.get("mode") === "compare" ? "compare" : "ranked";
   state.config = ["b0", "b1", "full"].includes(params.get("config")) ? params.get("config") : "full";
   els.k.value = ["5", "10", "20", "50"].includes(params.get("k")) ? params.get("k") : "10";
-  run({ scroll: false });
+  run({ scroll });
   return true;
 }
 

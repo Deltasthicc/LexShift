@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility ui docmeta download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check figures ui docmeta download build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -16,6 +16,8 @@ help:
 	@echo "check-data       check the hand-made queries, qrels and gold list against the plan"
 	@echo "conformance      check M1, M2 and M3 artefacts and functions against the shared contracts"
 	@echo "feasibility      count what the corpus holds for each judged query (never a grade)"
+	@echo "final-check      audit the submission checklist (ARGS=--run adds pytest, both smoke tests and the demo)"
+	@echo "figures          draw the pipeline diagram for the report (docs/figures)"
 	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
 	@echo "download         M1: fetch the AWS Open Data judgments"
@@ -80,3 +82,9 @@ build-citations:
 
 build-health:
 	$(PY) -m m3_treatment.scores build
+
+final-check:
+	$(PY) -m eval.submission_check $(ARGS)
+
+figures:
+	$(PY) -m eval.figures

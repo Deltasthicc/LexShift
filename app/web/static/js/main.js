@@ -2,7 +2,7 @@
 import { $, $$, show, store } from "./dom.js";
 import { initMotion, scrollToTarget, setNavActive, swapView, watchSections, requestFrame } from "./motion.js";
 import { initAccordion, initCarousel } from "./sections.js";
-import { applyParams, focusQuery, initSearch } from "./search.js";
+import { applyParams, focusQuery, initSearch, paramsDiffer } from "./search.js";
 import { initStatus } from "./status.js";
 import { renderEvaluation } from "./evaluation.js";
 import { renderJudging } from "./judging.js";
@@ -53,6 +53,7 @@ async function doRoute() {
   else {
     if (path === "/method") scrollToTarget("#method", { offset: 70 });
     if (!searchBooted) { searchBooted = true; applyParams(params); }
+    else if (paramsDiffer(params)) applyParams(params, { scroll: true });
   }
   requestFrame();
 }

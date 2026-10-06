@@ -2,6 +2,10 @@
 
 One submission per team through the course form: **repo link, video link, report PDF**. Tick every box before submitting.
 
+`python -m eval.submission_check` checks the items a program can check (stub switches, the judged data against the plan, the result files,
+banned wording and the not-legal-advice note, secrets, size, the README and the AI-use log) and lists the rest as MANUAL; add `--run` to run
+the tests, both smoke tests and the demo as well, and `--strict` on the day you submit so that unfinished items fail too.
+
 ## Repository and README (rubric: working system, 20)
 
 - [ ] `main` has every module merged, and `python -m pytest` and `python eval/smoke.py` pass on it.
