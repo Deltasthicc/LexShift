@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from m3_treatment.text import jaccard, party_tokens, sentence_index, sentence_spans, split_parties
+from m3_treatment.text import COMMON_NAME_WORDS, jaccard, party_tokens, sentence_index, sentence_spans, split_parties
 
 DEFAULT_MAX_CHARS = 1500  # headnote citation lists can be one 3,000-character "sentence"; keep windows LLM-sized
 
@@ -86,27 +86,54 @@ _REVERSED = re.compile(r"\bset\s+aside\b|\breversed\b|\bquashed\b", re.IGNORECAS
 SAME_PARTIES_THRESHOLD = 0.6
 
 
-def same_parties(citing_title: str, cited_title: str) -> bool:
-    """Jaccard on party-name tokens (government words removed) at or above SAME_PARTIES_THRESHOLD.
+def same_parties(citing_title: str, cited_title: str, common: frozenset[str] | set[str] = frozenset()) -> bool:
+    """Same dispute: Jaccard on party-name tokens (government words removed) at or above SAME_PARTIES_THRESHOLD, AND
+    at least one shared token that is distinctive (not a common name such as Ram or Singh, not in `common`).
 
+    The second condition matters because a false "same parties" drops the edge as appeal history: "Ram Singh v. State of
+    U.P." and "Ram Singh v. State of Haryana" are usually different people, and treating them as one dispute would hide
+    a real overruling. `common` is the resolver's corpus stop list (title tokens frequent across the corpus).
     Order-insensitive, because appellant and respondent swap sides between the High Court and this Court.
     """
     if not cited_title or not citing_title:
         return False
-    a = party_tokens(" ".join(split_parties(citing_title)), _GOVERNMENT)
-    b = party_tokens(" ".join(split_parties(cited_title)), _GOVERNMENT)
-    return bool(a and b) and jaccard(a, b) >= SAME_PARTIES_THRESHOLD
+    a, b = _private_tokens(citing_title), _private_tokens(cited_title)
+    if not (a and b) or jaccard(a, b) < SAME_PARTIES_THRESHOLD:
+        return False
+    return bool((a & b) - COMMON_NAME_WORDS - set(common))
 
 
-def is_appeal_history(window: str, citing_title: str, cited_title: str, cited_is_sc: bool = True) -> bool:
+# A side that is the State ("State of Haryana", "State, rep. by Inspector of Police", "Union of India", "Govt. of NCT")
+# names the prosecutor, not the dispute: two different accused both prosecuted in Haryana share it.
+_GOVERNMENT_SIDE = re.compile(
+    r"^\s*(?:the\s+)?(?:state|union\s+of\s+india|government|govt|central\s+bureau|c\.?b\.?i|commissioner|collector|"
+    r"director|secretary|inspector|superintendent|nct|public\s+prosecutor)\b",
+    re.IGNORECASE,
+)
+
+
+def _private_tokens(title: str) -> set[str]:
+    """Party tokens of the non-government side(s) of a case name."""
+    sides = [s for s in split_parties(title) if s and not _GOVERNMENT_SIDE.match(s)]
+    return party_tokens(" ".join(sides), _GOVERNMENT)
+
+
+def is_appeal_history(
+    window: str,
+    citing_title: str,
+    cited_title: str,
+    cited_is_sc: bool = True,
+    common: frozenset[str] | set[str] = frozenset(),
+) -> bool:
     """True when the cited decision is this case's own history (the judgment under appeal, review or remand).
 
-    * Same parties as the citing judgment: the earlier round of the same dispute (High Court order, review petition).
+    * Same parties as the citing judgment, sharing a distinctive name: the earlier round of the same dispute (High
+      Court order, review petition).
     * A non-Supreme-Court decision cited as the impugned judgment, or described as set aside / reversed / quashed: a
       reversal on appeal, which is never an overruling of a precedent.
     A Supreme Court precedent with different parties is never appeal history, whatever words surround it.
     """
-    if same_parties(citing_title, cited_title):
+    if same_parties(citing_title, cited_title, common):
         return True
     if cited_is_sc:
         return False

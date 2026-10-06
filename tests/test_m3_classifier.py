@@ -116,3 +116,19 @@ def test_per_class_report_matches_sklearn():
         assert rep["per_class"][c]["support"] == s[i]
     assert rep["accuracy"] == pytest.approx(5 / 7)
     assert rep["confusion"]["overruled"]["neutral"] == 1
+
+
+def test_cache_key_depends_on_the_few_shot_examples(tmp_path):
+    from m3_treatment.classifier import ZERO_SHOT, shots_fingerprint
+
+    ex = [Example("[[A]] is overruled.", "overruled")]
+    assert shots_fingerprint([]) == ZERO_SHOT and shots_fingerprint(ex).startswith("fs-")
+    assert shots_fingerprint(ex) != shots_fingerprint([Example("[[A]] is overruled.", "neutral")])
+    w = "[[B]] was cited."
+    assert cache_key("m", w) != cache_key("m", w, shots_fingerprint(ex))
+    cache = LLMCache(tmp_path / "c.jsonl")
+    assert LLMLabeller(cache, "m", FakeLLM()).label([w]) == 1
+    few = LLMLabeller(cache, "m", FakeLLM(), examples=ex)
+    assert few.label([w]) == 1  # the zero-shot label is not reused
+    row = cache.get(cache_key("m", w, few.shots))
+    assert row["shots"] == few.shots and row["n_examples"] == 1

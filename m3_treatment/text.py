@@ -84,6 +84,14 @@ PARTY_STOPWORDS = frozenset(
     pvt private limited co company sri shri smt kumari km alias @ the a an for to on at with sq ldr retd
     """.split()
 )
+# Common given names and surnames, and generic institution words: two case names sharing only these ("Ram Singh")
+# may well be different people, and one of them alone is too ambiguous to stand as a short form of a case name.
+COMMON_NAME_WORDS = frozenset(
+    """singh kumar lal ram devi prasad das khan ali ahmed ahmad mohd mohammad mohammed sharma gupta verma yadav reddy rao
+    nair pillai patel shah jain mishra tiwari pandey chand nath bai begum bibi sahu babu raj kumari rani shri sri
+    state union india court high supreme government board commissioner corporation bank company municipal council
+    limited private public society trust india's""".split()
+)
 _VERSUS = re.compile(r"\s+(?:v\.?|vs\.?|versus)\s+", re.IGNORECASE)
 _WORD = re.compile(r"[a-z0-9]+")
 

@@ -38,6 +38,7 @@ from a single word: "overruled" in a window does not make the label `overruled`.
 - Labeller 1 fills `m3_L1.csv`. Labeller 2 independently fills `m3_L2.csv` (a subset, for Cohen's kappa). Do not
   look at each other's sheets or at `candidates.csv` (it shows which cue bucket found the window).
 - Fill only the `gold_label` column (and `notes` if useful). Leave `labeller` as it is.
-- Then run `python -m m3_treatment.gold merge`. Disagreements go to `disagreements.csv`. Re-read each one together
+- Then run `python -m m3_treatment.gold merge`. It refuses while any window is blank (use `--allow-incomplete` for a
+  partial look). It also refuses if a sheet is missing or would lose a typed adjudication. Disagreements go to `disagreements.csv`. Re-read each one together
   and fill `adjudicated`, then run merge again.
 - Record who labelled what in `AI_USE_LOG.md`: no model may produce these labels.
