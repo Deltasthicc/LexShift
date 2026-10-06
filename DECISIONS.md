@@ -112,6 +112,28 @@ Provider output is checked against `common/contracts.py` at runtime and a violat
 malformed signal must fail loudly instead of quietly reordering a ranking. Evidence is shown strongest-first as M3 returns it,
 truncated to `ranking.max_evidence`; the explanation still counts the full list.
 
+### D-014 (2026-10-06) How the qrels are built (pooling and judging tools)
+`eval/pool.py` pools the top-20 (the evaluation depth) of b0, b1 and full into `eval/judging/<round>/`. The judge sheet is
+**blind**: documents are shuffled per query with a seeded shuffle and carry no scores, ranks, system names, continuity or health
+values, because those come from the system under test and would make the grades circular; which system returned what is kept in
+a separate `provenance.csv`. Pooling is **incremental**: documents already in `qrels.tsv` are not asked about again, so a second
+round after tuning only adds what is new. A round directory is never overwritten (`--force` regenerates only the template,
+provenance and summary, never the judges' files), and pooling from stub providers is refused. `eval/make_qrels.py` requires each
+judge file to contain exactly the template's rows, reports percent agreement and Cohen's kappa (plain and quadratic-weighted,
+because grades are ordinal), requires every disagreement to be adjudicated by re-reading (the `adjudicated` column), refuses to
+change a grade already in `qrels.tsv`, and writes `qrels.tsv` only when the round is complete (`--allow-incomplete` writes the
+settled rows). No tool assigns a grade. The Guide's wording is "pooled top-20 of all configs, two judges"; the blind sheet, the
+incremental rounds and the adjudication file are our additions.
+
+### D-015 (2026-10-06) Review fixes to M4 and two small shared-file edits
+Found while reviewing M4: `harmful@10` and `judged@10` were selectable as tuning objectives although the first is
+lower-is-better and the second measures the pool, so tuning could have optimised the wrong direction; objectives are now
+restricted to `eval.metrics.OBJECTIVES` (nDCG@10, MAP, P@5, P@10, R@10). The `ranking:` and `evaluation:` config sections are
+validated with clear messages (`m4_rank.weights.validate_ranking_config`). Two additive edits to shared files, flagged for the
+other owners: `common/config.yaml` gained `paths.judging_dir`, and `common/io.read_delimited` reads `utf-8-sig`, because
+spreadsheet programs write a byte-order mark that would otherwise corrupt the first column name; files without one read as
+before.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

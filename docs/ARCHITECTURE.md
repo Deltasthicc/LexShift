@@ -87,7 +87,8 @@ where each concept is in the code.
 | Heap-based top-K over the fused scores | `m4_rank/fusion.py` | M4 | implemented |
 | P@k, Recall@k, MAP, nDCG, harmful@k, bootstrap intervals | `eval/metrics.py` | M4 | implemented; checked against hand-computed values |
 | Ablation B0 / B1 / full, DEV-only weight tuning | `eval/run_ablation.py`, `eval/tuning.py` | M4 | implemented; needs the real modules and the hand-made qrels |
-| Pooling of the top-20 of every system for judging | `eval/pool.py` | M4 | planned |
+| Pooling of the top-20 of every system for judging, blind and incremental | `eval/pool.py` | M4 | implemented; needs the real modules to pool real documents |
+| Inter-judge agreement (percent, Cohen's kappa) and qrels construction | `eval/agreement.py`, `eval/make_qrels.py` | M4 | implemented; checked against hand-computed kappa |
 
 Libraries are allowed but must be explained in IR terms in the report: for example `rank_bm25` (M1) is used only as a
 sanity check against our own BM25, never in the live path.

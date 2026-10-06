@@ -10,15 +10,19 @@ stubs and the real modules replace them one by one.
 - [x] `rank()`: top-100 from `search()`, add continuity, health and authority, normalise, weighted sum, return top-K with the
       per-signal breakdown and an explanation. `rank.py`, `fusion.py`, `normalize.py`, `explain.py`, `weights.py`
 - [x] Ablation configs: **B0** BM25 only, **B1** + statute continuity, **full** (+ health + authority). `common/config.yaml`
-- [ ] 30 queries (10 dev, 20 test), four types: **A** BNS query needing an IPC precedent, **B** changed or omitted
-      provisions, **C** doctrines with overruled cases, **D** bare-number collisions. Written by hand. `eval/queries.jsonl`
-- [ ] Graded qrels from the pooled top-20 of all configs, two judges: 2 = relevant and good law, 1 = relevant but law
-      materially changed or precedent criticised, 0 = irrelevant or overruled on the queried point. `eval/qrels.tsv`
-      (the pooling and judge-sheet tool, `eval/pool.py`, is still to do)
+- [ ] **By hand, the team's job:** 30 queries (10 dev, 20 test), four types: **A** BNS query needing an IPC precedent, **B**
+      changed or omitted provisions, **C** doctrines with overruled cases, **D** bare-number collisions. `eval/queries.jsonl`.
+      Ready for it: 25 example queries and the writing rules in [eval/JUDGING_GUIDE.md](../eval/JUDGING_GUIDE.md)
+- [x] Pooling tool: the top-20 of every system into a blind judge sheet, incrementally. `eval/pool.py`
+- [x] Two-judge qrels tooling: kappa, disagreements, adjudication, `qrels.tsv`. `eval/make_qrels.py`, `eval/agreement.py`,
+      `eval/check_data.py`
+- [ ] **By hand, the team's job:** the grades (2 = relevant and good law, 1 = relevant but law materially changed or precedent
+      criticised, 0 = irrelevant or overruled on the queried point) and `eval/gold_overrulings.csv`. Never generated
 - [x] Metrics: P@5, Recall@10, MAP, nDCG@10, harmful@10 (overruled cases in the top 10), plus P@10 and judged@10. Tune weights
       on **dev only**. `eval/metrics.py`, `eval/tuning.py`, `eval/run_ablation.py`
 - [x] Demo (CLI) with score breakdowns and evidence sentences. `app/cli.py`. A Streamlit page is optional and not started
-- [ ] README (kept current), report skeleton, video script
+- [x] README (kept current), report skeleton, video script, submission checklist: drafts in `docs/`. The numbers in them are
+      placeholders until the real run exists; nothing in the drafts is a result
 
 ## How the code fits together
 
@@ -42,10 +46,21 @@ eval.run_ablation / app.cli        -> metrics tables, chart, demo
 
 ```bash
 python -m app.cli "BNS 103 murder" --offence-date 2025-01-10 --verbose
-python -m eval.run_ablation --tune --split test     # tune on dev, report test
+python -m eval.pool --round round1                   # blind judge sheet from the systems' top-20
+python -m eval.make_qrels --round round1             # two judges -> qrels.tsv (+ kappa, disagreements)
+python -m eval.check_data --strict                   # hand-made data against the plan
+python -m eval.run_ablation --tune --split test      # tune on dev, report test
 python -m eval.run_ablation --split test
 python -m app.docmeta                                # optional: titles for the demo, from judgments.jsonl
 ```
+
+## Order of work from here
+
+1. Write the queries (the guide has examples), then switch the real modules on and run `python eval/smoke.py`.
+2. `eval.pool`, grade independently, `eval.make_qrels`, adjudicate, `eval.make_qrels` again, write the gold list, `eval.check_data`.
+3. `eval.run_ablation --tune`, then pool a second round for the tuned weights, grade it, and report on test.
+4. Fill the report and the video from the generated files: [report](../docs/REPORT_SKELETON.md),
+   [video](../docs/VIDEO_SCRIPT.md), [checklist](../docs/SUBMISSION_CHECKLIST.md).
 
 ## You hand over
 

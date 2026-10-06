@@ -32,6 +32,7 @@ Items marked **proposed** were not fixed by the Guide; they are v0.1 proposals (
 | `eval/queries.jsonl` | M4 | `qid`, `text`, `offence_date`, `split` (dev or test), `type` (A to D) |
 | `eval/qrels.tsv` | M4 | `qid`, `doc_id`, `grade` (0, 1, 2). **Proposed:** tab-separated with a header row |
 | `eval/gold_overrulings.csv` | M4 | **Proposed:** `overruled_doc_id`, `overruling_doc_id`, `point`, `source`, `verified_by`. Hand-verified; used only for `harmful@k` |
+| `eval/judging/<round>/` | M4 | **Proposed:** `sheet_template.csv` (`qid`, `query`, `type`, `offence_date`, `doc_id`, `title`, `date`, `bench_size`, `excerpt`, `grade`, `note`), `judge1.csv` and `judge2.csv` (the template with `grade` filled), `disagreements.csv`, `provenance.csv`, `agreement.md`, `summary.md`. See [eval/JUDGING_GUIDE.md](../eval/JUDGING_GUIDE.md) |
 | `data/processed/doc_meta.jsonl` | M4 (derived, optional) | **Proposed:** `doc_id`, `title`, `date`, `bench_size`, so the demo can show titles without loading full text |
 
 Vocabularies:

@@ -137,6 +137,9 @@ such as `search,health`.
 | `make demo QUERY='...'` | `python -m app.cli "..." [--offence-date YYYY-MM-DD]` | M4 |
 | `make eval` | `python -m eval.run_ablation --split test` | M4 |
 | `make tune` | `python -m eval.run_ablation --tune` | M4 |
+| `make pool ROUND=round1` | `python -m eval.pool --round round1` | M4 |
+| `make qrels ROUND=round1` | `python -m eval.make_qrels --round round1` | M4 |
+| `make check-data` | `python -m eval.check_data` | M4 |
 
 The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
 
@@ -187,7 +190,9 @@ Systems compared: **B0** BM25 only, **B1** BM25 plus statutory continuity, **ful
 is 30 hand-written queries (10 dev, 20 test) across four types: a BNS query needing an IPC precedent, changed or omitted
 provisions, doctrines with overruled cases, and bare-number collisions. Relevance is graded 0/1/2 by two judges over the
 pooled top-20 of every system. Metrics: P@5, Recall@10, MAP, nDCG@10 and harmful@10 (known-overruled cases in the top 10).
-Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/README.md).
+Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/README.md). The queries, the grades and the
+gold overruling list are written **by hand** (two judges, blind sheets from the pooling tool, kappa reported); how, with example
+queries and worked grading rules: [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md).
 
 Reproduce the table with one command, once the real modules and the hand-made queries and judgements exist:
 
@@ -210,8 +215,8 @@ a test query), and with no queries or judgements it says so instead of printing 
 | M1 corpus, index and `search()` | Skeleton and spec only; served by a stub |
 | M2 statute layer | Skeleton and spec only; served by a stub; `statute_map.csv` is header-only |
 | M3 citations and treatment | Skeleton and spec only; served by stubs; no labels yet |
-| M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, and the CLI demo are implemented and unit-tested against fixtures and the stubs (branch `m4-rank`; skeleton only on `main` until it is merged) |
-| Judged queries and qrels | Not written yet (they are made by hand) |
+| M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker and the CLI demo are implemented and unit-tested against fixtures and the stubs; report skeleton, video script and submission checklist are drafted (branch `m4-rank`; skeleton only on `main` until it is merged) |
+| Judged queries and qrels | **Not written yet: they are made by hand.** Example queries, rules and tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)) |
 
 No retrieval-quality result has been measured yet, so none is claimed here. The unit tests check the arithmetic against
 hand-computed values on small synthetic fixtures; they say nothing about how well LexShift retrieves.
@@ -231,6 +236,10 @@ hand-computed values on small synthetic fixtures; they say nothing about how wel
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, ranking function, where each IR concept lives in the code |
 | [docs/CONTRACTS.md](docs/CONTRACTS.md) | Function signatures, file formats, vocabularies, the stub wiring |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | Branches, merge rules, the 36-hour plan |
+| [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md) | Writing the queries and grades by hand, with examples; the pooling and qrels tools |
+| [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md) | The 8-page report, section by section, with where each number comes from |
+| [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The 5 to 8 minute video: segments, live commands, recording checklist |
+| [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | Everything to tick before submitting |
 | [DECISIONS.md](DECISIONS.md) | Decision log |
 | [PROJECT_BRIEF.md](PROJECT_BRIEF.md) | Goal, rubric, constraints, risks |
 | Per-module `README.md` | Each owner's spec, hand-over and "done when" |
