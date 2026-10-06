@@ -2,9 +2,10 @@
 # Rule: add a library HERE before you import it anywhere in the repo, and note in DECISIONS.md
 # what it does in IR terms if it touches retrieval, scoring or evaluation.
 
-# --- core (used by the shared skeleton) ---
+# --- core (used by the shared skeleton and the M4 branch) ---
 pyyaml>=6.0
 pytest>=8.0
+matplotlib>=3.8          # M4: report graphs (eval/plots.py imports it lazily; everything else works without it)
 
 # --- planned, uncomment in the commit that first imports them ---
 # M1 (m1_index):      pandas, pyarrow          parquet metadata
@@ -15,5 +16,4 @@ pytest>=8.0
 # M3 (m3_treatment):  scikit-learn             tf-idf + logistic-regression baseline, Cohen's kappa
 #                     networkx                 PageRank (or implement power iteration ourselves)
 #                     an LLM client            offline few-shot labelling only, outputs cached, never at demo time
-# M4 (m4_rank, eval): matplotlib               report graphs
-#                     streamlit                optional thin demo page
+# M4 (m4_rank, eval): streamlit                optional thin demo page
