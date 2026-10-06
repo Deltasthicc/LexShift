@@ -181,6 +181,24 @@ When `doc_statutes.jsonl` (M2) exists, each negative evidence item carries the o
 `health(d, offence_ids)` then applies a negative only if those ids overlap the query's. An item with no known ids always
 applies. This is coarse: it uses the offences of the whole overruling judgment, not of the overruled point.
 
+### D-024 (2026-10-06) Review fixes in M3
+* **LLM cache and few-shot prompts.** The cache key now includes a fingerprint of the exact few-shot examples (or
+  `zero-shot`). Before, a label made before the gold set existed was reused under the few-shot prompt, and the F1 table
+  would have called it few-shot. The few-shot pool is drawn once and frozen in `data/labelling/m3_fewshot_pool.csv`, so
+  adding gold labels later does not change the prompt. The F1 report states the prompt actually used (zero-shot or N-shot).
+* **gold merge safety.** `merge` now refuses, writing nothing, when a sheet is missing, the sheets are swapped, the second
+  sheet has windows the first does not, a window is still blank (`--allow-incomplete` merges only the labelled rows), or
+  the merge would drop an adjudication already typed into `disagreements.csv`. Files are replaced atomically.
+* **Appeal history.** "Same parties" now compares only the non-government side ("State of Haryana" names the prosecutor,
+  not the dispute) and needs at least one shared distinctive token (not a common name such as Ram or Singh, not in the
+  corpus stop list). Before, "Ram Singh v. State of Haryana" and "Ram Singh v. State of U.P." counted as one dispute,
+  so a real overruling between them would have been dropped. Running headers are still recognised as self-references
+  by an exact-title test.
+* **Dependencies on M1.** `extract` reports how many judgments have a known bench, a parseable `reporter_citations` entry
+  and a dataset-form `doc_id`, in `reports/resolution.md` and on stderr. With no known bench at all it exits non-zero and
+  `citations build` stops, because then no negative treatment could lower any score. `health` reports negatives that
+  did not count and why (unknown bench or smaller citing bench).
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

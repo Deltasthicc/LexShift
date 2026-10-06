@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import random
 import re
 import sys
@@ -150,36 +151,75 @@ def cohens_kappa(labels_a: list[str], labels_b: list[str]) -> float:
     return (p_o - p_e) / (1 - p_e)
 
 
-def _read_sheet(path: Path, who: str) -> list[dict]:
+class MergeError(ValueError):
+    """The labelling round is not in a state that can be merged. Nothing was written."""
+
+
+def _read_sheet(path: Path, who: str) -> tuple[list[dict], list[str]]:
+    """(labelled rows, every window_id in the sheet). A missing sheet, a duplicate id or a bad label is an error."""
     from common.io import read_delimited
 
-    rows = []
+    if not path.exists():
+        raise MergeError(
+            f"{path} is missing. `gold sample` always writes both sheets (the second one even when empty); restore it "
+            "before merging, otherwise the second labeller's work and every adjudication would be lost."
+        )
+    rows, ids, seen = [], [], set()
     for i, r in enumerate(read_delimited(path), start=2):
+        wid = (r.get("window_id") or "").strip()
+        if not wid or wid in seen:
+            raise MergeError(f"{path.name} line {i}: missing or duplicate window_id {wid!r}")
+        seen.add(wid)
+        ids.append(wid)
+        if (r.get("labeller") or who).strip() != who:
+            raise MergeError(f"{path.name} line {i}: labeller {r['labeller']!r}, expected {who!r} (sheets swapped?)")
         label = (r.get("gold_label") or "").strip().lower()
         if not label:
             continue
         if label not in TREATMENT_LABELS:
             raise SchemaError(f"{path.name} line {i}: label {label!r} not in {TREATMENT_LABELS}")
-        rows.append({"window_id": r["window_id"], "window": r["window"], "gold_label": label, "labeller": who})
-    return rows
+        rows.append({"window_id": wid, "window": r["window"], "gold_label": label, "labeller": who})
+    return rows, ids
 
 
-def merge(out_dir: Path | None = None, gold_path: Path | None = None) -> dict:
-    """Combine the labelled sheets (and any adjudications) into treatment_gold.csv; return the agreement report."""
-    from common.io import read_delimited, write_delimited
+def _write_atomic(path: Path, columns, rows) -> None:
+    from common.io import write_delimited
+
+    tmp = path.with_name(path.name + ".tmp")
+    write_delimited(tmp, columns, rows)
+    os.replace(tmp, path)
+
+
+def merge(out_dir: Path | None = None, gold_path: Path | None = None, allow_incomplete: bool = False) -> dict:
+    """Combine the labelled sheets (and any adjudications) into treatment_gold.csv; return the agreement report.
+
+    Refuses, writing nothing, when: a sheet is missing; the second sheet has windows the first does not; any window
+    is still blank (unless `allow_incomplete`, which writes only the labelled rows); or the merge would drop an
+    adjudication someone already typed into disagreements.csv.
+    """
+    from common.io import read_delimited
 
     out_dir = out_dir or _labelling_dir()
     gold_path = gold_path or _gold_path()
-    l1 = _read_sheet(out_dir / "m3_L1.csv", "L1")
-    l2 = _read_sheet(out_dir / "m3_L2.csv", "L2") if (out_dir / "m3_L2.csv").exists() else []
+    l1, ids1 = _read_sheet(out_dir / "m3_L1.csv", "L1")
+    l2, ids2 = _read_sheet(out_dir / "m3_L2.csv", "L2")
+    extra = set(ids2) - set(ids1)
+    if extra:
+        raise MergeError(f"m3_L2.csv has {len(extra)} windows that are not in m3_L1.csv (e.g. {sorted(extra)[0]})")
+    blank = {"L1": len(ids1) - len(l1), "L2": len(ids2) - len(l2)}
+    if any(blank.values()) and not allow_incomplete:
+        detail = ", ".join(f"{who}: {n} of {len(ids)} windows blank" for (who, n), ids in zip(blank.items(), (ids1, ids2)) if n)
+        raise MergeError(f"labelling is not finished ({detail}). Finish it, or pass --allow-incomplete to merge only the labelled rows.")
+
     a = {r["window_id"]: r for r in l1}
     b = {r["window_id"]: r for r in l2}
     both = sorted(set(a) & set(b))
-    report = {"L1": len(a), "L2": len(b), "double": len(both)}
+    report = {"L1": len(a), "L2": len(b), "blank_L1": blank["L1"], "blank_L2": blank["L2"], "double": len(both)}
     if both:
         report["kappa"] = cohens_kappa([a[k]["gold_label"] for k in both], [b[k]["gold_label"] for k in both])
         report["agreement"] = sum(a[k]["gold_label"] == b[k]["gold_label"] for k in both) / len(both)
     disagree = [k for k in both if a[k]["gold_label"] != b[k]["gold_label"]]
+
     dis_path = out_dir / "disagreements.csv"
     adjudicated: dict[str, str] = {}
     if dis_path.exists():
@@ -189,16 +229,24 @@ def merge(out_dir: Path | None = None, gold_path: Path | None = None) -> dict:
                 if lab not in TREATMENT_LABELS:
                     raise SchemaError(f"disagreements.csv: adjudicated label {lab!r} not in {TREATMENT_LABELS}")
                 adjudicated[r["window_id"]] = lab
+    orphaned = sorted(set(adjudicated) - set(disagree))
+    if orphaned:
+        raise MergeError(
+            f"disagreements.csv has {len(orphaned)} typed adjudication(s) that are no longer disagreements "
+            f"(e.g. {orphaned[0]}): a sheet changed since the last merge. Nothing was written; check the sheets, "
+            "or move those rows out of disagreements.csv yourself if they are really obsolete."
+        )
+
     rows_dis = [
         {"window_id": k, "window": a[k]["window"], "L1": a[k]["gold_label"], "L2": b[k]["gold_label"], "adjudicated": adjudicated.get(k, "")}
         for k in disagree
     ]
-    write_delimited(dis_path, ("window_id", "window", "L1", "L2", "adjudicated"), rows_dis)
     adj_rows = [{"window_id": k, "window": a[k]["window"], "gold_label": adjudicated[k], "labeller": ADJUDICATOR} for k in disagree if k in adjudicated]
     out = l1 + l2 + adj_rows
     for r in out:
         GoldWindow.from_dict(r)
-    write_delimited(gold_path, TREATMENT_GOLD_COLUMNS, out)
+    _write_atomic(dis_path, ("window_id", "window", "L1", "L2", "adjudicated"), rows_dis)
+    _write_atomic(gold_path, TREATMENT_GOLD_COLUMNS, out)
     report["disagreements"] = len(disagree)
     report["unadjudicated"] = len([k for k in disagree if k not in adjudicated])
     report["written"] = len(out)
@@ -241,7 +289,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--n", type=int, default=250)
     s.add_argument("--double", type=int, default=60, help="windows also given to the second labeller")
     s.add_argument("--seed", type=int, default=0)
-    sub.add_parser("merge", help="check sheets, report kappa, write treatment_gold.csv")
+    mg = sub.add_parser("merge", help="check sheets, report kappa, write treatment_gold.csv")
+    mg.add_argument("--allow-incomplete", action="store_true", help="merge only the labelled rows while labelling continues")
     args = ap.parse_args(argv)
     if args.cmd == "sample":
         cands = sample_candidate_windows(args.n, args.seed)
@@ -251,7 +300,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {k}: {p}")
         print("Label by reading each window; see m3_treatment/LABELLING_GUIDE.md. Do not open candidates.csv while labelling.")
         return 0
-    rep = merge()
+    try:
+        rep = merge(allow_incomplete=args.allow_incomplete)
+    except MergeError as exc:
+        print(f"merge refused: {exc}")
+        return 1
     print(" ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}" for k, v in rep.items()))
     if rep.get("unadjudicated"):
         print("Fill the `adjudicated` column of disagreements.csv by re-reading each window, then run merge again.")

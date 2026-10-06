@@ -91,3 +91,15 @@ def test_bench_from_the_coram_line():
     assert bench_from_text("[for himself and Khanwilkar, J.] [Paras 15, 16]") is None
     assert bench_of({"bench_size": None, "judges": ["R. BANUMATHI"], "text": "[R. BANUMATHI AND INDIRA BANERJEE, JJ.]"}) == 2
     assert bench_of({"bench_size": None, "judges": ["G.S. SINGHVI"], "text": ""}) is None  # one name may be just the author
+
+
+def test_data_checks_flag_missing_m1_fields():
+    levels = lambda checks: [lvl for lvl, _ in checks]  # noqa: E731
+    good = CorpusIndex([rec("2013_17_116_200", "A v. B", "2013-01-01", ["[2013] 17 S.C.R. 116"], 2)])
+    assert levels(good.data_checks()) == ["OK", "OK", "OK"]
+    # M1 shipped no bench, no reporter citations and its own ids: every dependency is reported
+    bad = CorpusIndex([rec("J1", "A v. B", "2013-01-01"), rec("J2", "C v. D", "2014-01-01")])
+    assert levels(bad.data_checks()) == ["ERROR", "WARN", "WARN"]
+    assert "bench" in bad.data_checks()[0][1] and "never" in bad.data_checks()[0][1]
+    half = CorpusIndex([rec("2013_1_1_9", "A v. B", "2013-01-01", bench=2), rec("2013_1_10_19", "C v. D", "2013-01-01"), rec("2013_1_20_29", "E v. F", "2013-01-01")])
+    assert half.data_checks()[0][0] == "WARN"
