@@ -233,6 +233,22 @@ When `doc_statutes.jsonl` (M2) exists, each negative evidence item carries the o
 `health(d, offence_ids)` then applies a negative only if those ids overlap the query's. An item with no known ids always
 applies. This is coarse: it uses the offences of the whole overruling judgment, not of the overruled point.
 
+### D-024 (2026-10-06) M3 merged into m4-rank and checked against M4
+M3 arrived through a pull request merged into `main`; `main` was merged into `m4-rank`. The only conflicts were append-only
+(`DECISIONS.md`, `requirements.txt`) and were resolved by keeping both sides. M3 edited only its own `m3_treatment:` section of
+`common/config.yaml`. Findings are in [docs/M3_INTEGRATION_REVIEW.md](docs/M3_INTEGRATION_REVIEW.md); they are for M3 to act on and
+M4 did not change M3's code. What M4 changed, because the integration test showed it:
+* `m4_rank.rank.ArtefactError`: a provider's `KeyError` or `FileNotFoundError` (an id missing from `doc_health.jsonl`, a build step
+  not run) is now one clear error naming the call, handled by the CLI, `eval.pool` and `eval.run_ablation`, instead of a traceback.
+  The call site is always named and the original exception is chained, so a genuine bug in a module is still traceable.
+* The demo no longer truncates evidence at 220 characters. M3's evidence is a three-sentence window and the sentence that does the
+  overruling is the middle one; with the cut the overruled case's own evidence ended before it. Evidence is shown in full, wrapped,
+  with M3's `confidence` and `citing_bench` when present; `--evidence-chars N` shortens it on request. The first version of the test
+  passed for the wrong reason (another item quoted the same words) and now checks inside the overruled item.
+* Evidence items may carry optional extra keys; M3 adds `confidence`, `citing_bench`, and `offence_ids` on negatives
+  (docs/CONTRACTS.md).
+`stubs.health` and `stubs.authority` stay `true`: `doc_health.jsonl` does not exist until M1's corpus does.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

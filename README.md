@@ -150,8 +150,10 @@ python -m app.cli "BNS 103 murder" --offence-date 2025-01-10 -k 3 --verbose
 ```
 
 Options: `--config b0|b1|full` (the ablation systems), `-k`, `--json` for machine-readable output, `--verbose` to also show
-the query parse, the weights and the raw signals. Each result shows its score components, the reason behind each signal
-(for continuity, the statute mapping; for health, the label and the citing judgment) and the evidence sentences.
+the query parse, the weights and the raw signals, `--evidence-chars N` to shorten the evidence passages. Each result shows its
+score components, the reason behind each signal (for continuity, the statute mapping; for health, the label and the citing
+judgment) and the evidence: the passage from the later judgment, shown in full (it is the evidence), with the classifier's
+confidence and the citing bench when M3 supplies them.
 
 Until M1 to M3 land their real functions the demo runs on the labelled stand-ins and says so loudly. This is real output of
 that mode, **not a search result** (the ids and sentences are placeholders):
@@ -170,7 +172,8 @@ query: BNS 103 murder
  ...
  4. STUB-003   final 0.723
       health [############........]  0.60 x 0.20 = 0.120 (doubted per STUB-000)
-      evidence: doubted in STUB-000: "STUB: fixed value, not computed from any judgment (placeholder sentence)"
+      evidence: doubted in STUB-000
+        "STUB: fixed value, not computed from any judgment (placeholder sentence)"
 ```
 
 If `data/processed/doc_meta.jsonl` exists (`python -m app.docmeta` derives it from `judgments.jsonl`), case titles, dates and
@@ -207,14 +210,15 @@ a test query), and with no queries or judgements it says so instead of printing 
 
 ## Status
 
-*Last updated 2026-10-06. This table is the honest state of `main`; each owner updates their row when they merge.*
+*Last updated 2026-10-06 (M3 merged into `m4-rank`, checked against M4). This table is the honest state of the project; each
+owner updates their row when they merge.*
 
 | Module | State on `main` |
 |---|---|
 | Shared contracts, config, stubs, smoke test | **Done**, with unit tests |
 | M1 corpus, index and `search()` | Skeleton and spec only; served by a stub |
 | M2 statute layer | Skeleton and spec only; served by a stub; `statute_map.csv` is header-only |
-| M3 citations and treatment | Skeleton and spec only; served by stubs; no labels yet |
+| M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), including an end-to-end run on a synthetic corpus checked against M4's `rank()` and demo. **Not yet run on the corpus** (it needs M1's `judgments.jsonl`): no `citations.jsonl` or `doc_health.jsonl`, no gold set, no Gemini labels, no F1 table; so `stubs.health` and `stubs.authority` stay `true` |
 | M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker and the CLI demo are implemented and unit-tested against fixtures and the stubs; report skeleton, video script and submission checklist are drafted (branch `m4-rank`; skeleton only on `main` until it is merged) |
 | Judged queries and qrels | **Not written yet: they are made by hand.** Example queries, rules and tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)) |
 

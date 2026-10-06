@@ -68,6 +68,11 @@ rank(query: str, offence_date: str | None = None, k: int = 10, config: str = "fu
 `QueryStatutes` (**proposed**): `query`, `offence_date`, `governing_act` (the code that applies, from an explicit act
 or the offence date; `None` if unknown), `refs[StatuteRef]`, `notes[]`, and a derived `offence_ids`.
 
+Evidence items (`{citing_doc, label, sentence}`) may carry **optional extra keys**. M3 adds `confidence`, `citing_bench` and, on
+negative labels, `offence_ids` (the offences of the citing judgment, used for point-level health). Consumers must ignore keys
+they do not know and may display the ones they do: the demo shows `confidence` and `citing_bench`. `sentence` is M3's citation
+window (the citing sentence plus its neighbours, up to 1,500 characters), so it is shown in full.
+
 `Result` carries four **additive** fields beyond the Guide's seven, which never replace a contract field:
 `evidence` (for the demo), `raw` (signals before normalisation), `contributions` (weight x normalised value; sums to
 `final`), `stubbed` (signals served by fixed-value stubs).
