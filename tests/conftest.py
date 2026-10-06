@@ -102,7 +102,8 @@ def eval_workspace(tmp_path, write_config, monkeypatch, make_providers):
     ws = Workspace(tmp_path, make_providers())
     cfg_path = write_config(tmp_path / "config.yaml", {
         "paths": {"queries": str(ws.queries_path), "qrels": str(ws.qrels_path), "gold_overrulings": str(ws.gold_path),
-                  "judging_dir": str(ws.judging), "results_dir": str(ws.results), "judgments": str(ws.judgments_path)},
+                  "results_dir": str(ws.results), "judgments": str(ws.judgments_path)},
+        "evaluation": {"judging_dir": str(ws.judging)},
         "ranking": {"use_tuned": False, "tuned_file": str(tmp_path / "weights_tuned.yaml")},
     })
     monkeypatch.setenv("LEXSHIFT_CONFIG", str(cfg_path))

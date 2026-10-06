@@ -33,12 +33,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from common.config import load_config, resolve_path  # noqa: E402
-from common.io import read_jsonl, write_delimited  # noqa: E402
-from common.providers import SIGNAL_GROUP, Providers, load_providers  # noqa: E402
+from common.io import read_jsonl  # noqa: E402
+from common.providers import Providers, load_providers  # noqa: E402
 from common.schema import Query  # noqa: E402
-from eval.loaders import EvalDataError, load_qrels, load_queries  # noqa: E402
-from m4_rank.rank import Collected, collect, fuse_collected  # noqa: E402
-from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights  # noqa: E402
+from eval.loaders import (  # noqa: E402
+    EvalDataError, judging_root, load_qrels, load_queries, valid_round_name, write_table,
+)
+from m4_rank.rank import Collected, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.weights import canonical_config, format_weights, load_weights, signals_used  # noqa: E402
 
 SHEET_COLUMNS = ("qid", "query", "type", "offence_date", "doc_id", "title", "date", "bench_size", "excerpt", "grade", "note")
 DEFAULT_CONFIGS = "b0,b1,full"
@@ -92,6 +94,16 @@ def _tidy(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
 
+def safe_cell(text: Any) -> str:
+    """Neutralise spreadsheet formulas: a cell starting with = + - @ (or a tab/CR) is prefixed with a single quote.
+
+    The judges open these sheets in a spreadsheet program. Court text (OCR separators such as '---' or '= = =') routinely starts
+    with those characters and would otherwise be evaluated or mangled, and re-saved that way.
+    """
+    s = "" if text is None else str(text)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
 def load_doc_context(doc_ids: set[str], path: Path | None = None) -> dict[str, dict[str, Any]]:
     """Title, date, bench and a short excerpt for the pooled documents only (one streaming pass over judgments.jsonl)."""
     path = path or resolve_path("judgments", load_config())
@@ -121,9 +133,9 @@ def sheet_rows(queries: Sequence[Query], pool_new: Pool, context: Mapping[str, M
         for doc_id in blind_order(q.qid, pool_new.get(q.qid, {}), seed):
             ctx = context.get(doc_id, {})
             rows.append({
-                "qid": q.qid, "query": q.text, "type": q.type, "offence_date": q.offence_date or "",
-                "doc_id": doc_id, "title": ctx.get("title", ""), "date": ctx.get("date", ""),
-                "bench_size": ctx.get("bench_size", ""), "excerpt": ctx.get("excerpt", ""), "grade": "", "note": "",
+                "qid": q.qid, "query": safe_cell(q.text), "type": q.type, "offence_date": q.offence_date or "",
+                "doc_id": doc_id, "title": safe_cell(ctx.get("title", "")), "date": ctx.get("date", ""),
+                "bench_size": ctx.get("bench_size", ""), "excerpt": safe_cell(ctx.get("excerpt", "")), "grade": "", "note": "",
             })
     return rows
 
@@ -149,7 +161,7 @@ def render_summary(
         f"# Pool summary: {round_name}", "",
         f"Generated {dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}. Providers: {providers.describe()}.",
         f"Systems pooled: {', '.join(configs)}; depth {depth}; shuffle seed {seed}.",
-        "Weights: " + "; ".join(f"{n} = " + "/".join(f"{w[s]:.2f}" for s in SIGNALS) + " (rel/cont/health/auth)" for n, w in weights.items()) + ".",
+        "Weights: " + "; ".join(f"{n} = {format_weights(w)} (rel/cont/health/auth)" for n, w in weights.items()) + ".",
         "",
     ]
     if providers.stubbed:
@@ -184,18 +196,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--configs", default=DEFAULT_CONFIGS, help=f"systems to pool (default {DEFAULT_CONFIGS})")
     ap.add_argument("--seed", type=int, default=0, help="seed of the per-query shuffle (default 0)")
     ap.add_argument("--include-judged", action="store_true", help="also list documents that already have a grade")
-    ap.add_argument("--force", action="store_true", help="regenerate an existing round's template, provenance and summary (never touches judge files)")
+    ap.add_argument("--force", action="store_true", help="regenerate an existing round's template, provenance and summary; refused once judging has started")
     ap.add_argument("--allow-stubs", action="store_true", help="pool from stub providers; the round is named stub_* and is not usable")
     ap.add_argument("--out", help="judging directory (default: paths.judging_dir)")
     return ap.parse_args(argv)
 
 
-GENERATED = ("sheet_template.csv", "provenance.csv", "summary.md")
+JUDGING_FILES = ("judge1.csv", "judge2.csv", "disagreements.csv")  # a round with any of these has judging under way
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cfg = load_config()
+    if not valid_round_name(args.round):
+        print(f"--round must be a plain folder name (letters, digits, '.', '-', '_'), got {args.round!r}.")
+        return 2
     try:
         configs = [canonical_config(n, cfg) for n in args.configs.split(",") if n.strip()]
         all_queries = load_queries()
@@ -217,20 +232,26 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     weights = {n: load_weights(n, cfg) for n in configs}
-    signals = tuple(s for s in SIGNALS if any(s in active_signals(w) for w in weights.values()))
+    signals = signals_used(weights, configs)
     providers = load_providers(cfg)
-    stubbed = sorted(SIGNAL_GROUP[s] for s in {"rel", *signals} if SIGNAL_GROUP[s] in providers.stubbed)
+    stubbed = stubbed_groups(providers, signals)
     if stubbed and not args.allow_stubs:
         print("Refusing to pool: these providers are fixed-value stubs, so the documents would be placeholders: "
               + ", ".join(stubbed) + ".\nSwitch the real functions on in common/config.yaml first (or LEXSHIFT_STUBS=none).")
         return 2
 
-    base = Path(args.out) if args.out else resolve_path("judging_dir", cfg)
+    base = Path(args.out) if args.out else judging_root(cfg)
     round_dir = base / (f"stub_{args.round}" if stubbed else args.round)
-    if round_dir.exists() and any(round_dir.iterdir()) and not args.force:
-        print(f"{round_dir} already exists. Pick a new --round name, or --force to regenerate its template/provenance/summary "
-              "(judge files are never touched).")
-        return 2
+    if round_dir.exists() and any(round_dir.iterdir()):
+        started = [name for name in JUDGING_FILES if (round_dir / name).exists()]
+        if started:
+            print(f"{round_dir} already has {', '.join(started)}: judging has started, and regenerating the template would "
+                  f"orphan those grades. Use a new --round name; documents already graded are skipped automatically.")
+            return 2
+        if not args.force:
+            print(f"{round_dir} already exists. Pick a new --round name, or --force to regenerate its template, provenance "
+                  "and summary.")
+            return 2
 
     collected = {q.qid: collect(q.text, q.offence_date, signals, providers=providers, cfg=cfg) for q in queries}
     pool = build_pool(queries, collected, weights, depth, cfg)
@@ -247,9 +268,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     round_dir.mkdir(parents=True, exist_ok=True)
-    write_delimited(round_dir / "sheet_template.csv", SHEET_COLUMNS, rows)
+    write_table(round_dir / "sheet_template.csv", SHEET_COLUMNS, rows)
     prov = provenance_rows(pool, qrels, configs)
-    write_delimited(round_dir / "provenance.csv", list(prov[0]) if prov else ["qid", "doc_id"], prov)
+    write_table(round_dir / "provenance.csv", list(prov[0]) if prov else ["qid", "doc_id"], prov)
     summary = render_summary(args.round, queries, pool, pool_new, configs, weights, depth, args.seed, providers, bool(context))
     (round_dir / "summary.md").write_text(summary, encoding="utf-8", newline="\n")
 

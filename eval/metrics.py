@@ -123,6 +123,8 @@ def paired_bootstrap(
     Resamples queries with replacement under a fixed seed. With a few dozen queries the interval is wide: read it as a
     reminder of that, not as a significance test. Returns None if there are no shared queries.
     """
+    if n_boot < 1:
+        raise ValueError(f"n_boot must be >= 1, got {n_boot}")
     shared = [q for q in a if a[q] is not None and b.get(q) is not None]
     if not shared:
         return None

@@ -19,7 +19,7 @@ from typing import Any, Mapping
 
 from common import contracts
 from common.config import load_config
-from common.providers import Providers, load_providers
+from common.providers import SIGNAL_GROUP, Providers, load_providers
 from common.schema import QueryStatutes, Result
 from m4_rank.fusion import SignalRow, fuse
 from m4_rank.weights import SIGNALS, active_signals, load_weights
@@ -38,6 +38,11 @@ class Collected:
     signals: tuple[str, ...]  # signals that were collected, always including "rel"
     rows: list[SignalRow]
     stubbed: tuple[str, ...]  # collected signals served by fixed-value stubs
+
+
+def stubbed_groups(providers: Providers, signals: tuple[str, ...]) -> list[str]:
+    """Provider groups serving a stub for any of `signals`. `rel` is always in play: it supplies the candidates."""
+    return sorted(SIGNAL_GROUP[s] for s in {"rel", *signals} if SIGNAL_GROUP[s] in providers.stubbed)
 
 
 def _enforce(problems: list[str], where: str) -> None:

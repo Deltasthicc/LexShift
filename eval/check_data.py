@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 from common.config import load_config, resolve_path  # noqa: E402
 from common.io import read_jsonl  # noqa: E402
 from common.schema import QUERY_TYPES, SPLITS, Query  # noqa: E402
-from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries  # noqa: E402
+from eval.loaders import EvalDataError, judged_without, load_overruled, load_qrels, load_queries  # noqa: E402
 
 PLAN = {"dev": 10, "test": 20}  # Guide section 5, M4 block
 DATE_MATTERS = ("A", "D")  # BNS-needing-IPC and bare-number queries: the offence date decides which code applies
@@ -85,8 +85,8 @@ def check(
     if unjudged:
         f.warnings.append(f"{len(unjudged)} queries have no judgements yet: {', '.join(unjudged[:8])}" + (" ..." if len(unjudged) > 8 else ""))
     judged = [q for q in queries if qrels.get(q.qid)]
-    no_rel = [q.qid for q in judged if not any(g >= 1 for g in qrels[q.qid].values())]
-    no_good = [q.qid for q in judged if not any(g == 2 for g in qrels[q.qid].values())]
+    judged_ids = [q.qid for q in judged]
+    no_rel, no_good = judged_without(qrels, judged_ids, 1), judged_without(qrels, judged_ids, 2)
     if no_rel:
         f.warnings.append(f"no relevant document (grade >= 1) for {', '.join(no_rel)}: recall and AP are undefined for them")
     if no_good:

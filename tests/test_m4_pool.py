@@ -5,13 +5,11 @@ so at depth 2 the pool is {A, B} and at depth 3 it is {A, B, C, D}.
 
 import csv
 
-import pytest
-
 from common.config import load_config
 from common.io import write_jsonl
 from common.schema import Query
 from eval import pool
-from eval.pool import SHEET_COLUMNS, blind_order, build_pool, drop_judged, load_doc_context, overlap_stats
+from eval.pool import SHEET_COLUMNS, blind_order, build_pool, drop_judged, load_doc_context, overlap_stats, safe_cell
 from m4_rank.rank import collect
 from m4_rank.weights import SIGNALS, load_weights
 
@@ -133,14 +131,44 @@ def test_stub_providers_are_refused_and_stub_rounds_are_set_apart(eval_workspace
     assert "STUB ROUND" in (eval_workspace.judging / "stub_r1" / "summary.md").read_text(encoding="utf-8")
 
 
-def test_an_existing_round_is_never_overwritten_and_force_spares_judge_files(eval_workspace, capsys):
+def test_an_existing_round_is_never_overwritten_without_force(eval_workspace, capsys):
     assert run(["--round", "r1"]) == 0
-    judge = eval_workspace.judging / "r1" / "judge1.csv"
-    judge.write_text("qid,doc_id,grade\ndev1,A,2\n", encoding="utf-8")
+    before = (eval_workspace.judging / "r1" / "sheet_template.csv").read_bytes()
     assert run(["--round", "r1"]) == 2
     assert "already exists" in capsys.readouterr().out
-    assert run(["--round", "r1", "--force"]) == 0
-    assert judge.read_text(encoding="utf-8") == "qid,doc_id,grade\ndev1,A,2\n"  # a judge's work is never touched
+    assert run(["--round", "r1", "--force"]) == 0  # nobody has started judging, so regenerating is safe
+    assert (eval_workspace.judging / "r1" / "sheet_template.csv").read_bytes() == before  # same inputs, same sheet
+
+
+def test_force_is_refused_once_judging_has_started(eval_workspace, capsys):
+    assert run(["--round", "r1"]) == 0
+    folder = eval_workspace.judging / "r1"
+    template = (folder / "sheet_template.csv").read_bytes()
+    for name in ("judge1.csv", "judge2.csv", "disagreements.csv"):
+        (folder / name).write_text("qid,doc_id,grade\ndev1,A,2\n", encoding="utf-8")
+        assert run(["--round", "r1", "--force"]) == 2
+        assert name in capsys.readouterr().out
+        (folder / name).unlink()
+    assert (folder / "sheet_template.csv").read_bytes() == template  # the template a judge worked from is never replaced
+
+
+def test_round_names_must_be_plain_folder_names(eval_workspace, capsys):
+    for bad in ("../x", "..", "a/b", "a\\b", ".hidden", "", "has space"):
+        assert run(["--round", bad]) == 2, bad
+        assert "--round must be a plain folder name" in capsys.readouterr().out
+    assert not [p for p in eval_workspace.dir.iterdir() if p.name in ("x", "b")]
+    assert run(["--round", "round-2.a_b"]) == 0
+
+
+def test_spreadsheet_formula_characters_are_neutralised_in_the_sheet(eval_workspace):
+    assert [safe_cell(x) for x in ("=SUM(1)", "+1", "-1", "@x", "\tx", "plain", "", None, "a=b")] == \
+        ["'=SUM(1)", "'+1", "'-1", "'@x", "'\tx", "plain", "", "", "a=b"]
+    write_jsonl(eval_workspace.judgments_path, [
+        {"doc_id": d, "title": "=HYPERLINK(\"x\")", "date": "2019-01-01", "bench_size": 3, "zones": {"holding": "- - - the appeal"}, "text": "t"}
+        for d in "ABCD"])
+    run(["--round", "r1"])
+    rows = read(eval_workspace.judging / "r1" / "sheet_template.csv")
+    assert all(r["title"].startswith("'=") and r["excerpt"].startswith("'- ") for r in rows)
 
 
 def test_pooling_is_incremental_and_says_so_when_nothing_is_left(eval_workspace, capsys):

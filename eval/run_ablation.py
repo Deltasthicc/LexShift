@@ -23,13 +23,15 @@ if str(ROOT) not in sys.path:
 
 from common.config import load_config, resolve_path  # noqa: E402
 from common.io import write_delimited  # noqa: E402
-from common.providers import SIGNAL_GROUP, Providers, load_providers  # noqa: E402
+from common.providers import Providers, load_providers  # noqa: E402
 from common.schema import Query  # noqa: E402
 from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries  # noqa: E402
 from eval.metrics import METRIC_NAMES, OBJECTIVES, aggregate, evaluate_query, paired_bootstrap  # noqa: E402
 from eval.tuning import TuningError, save_tuned, tune_config  # noqa: E402
-from m4_rank.rank import Collected, collect, fuse_collected  # noqa: E402
-from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights, weights_source  # noqa: E402
+from m4_rank.rank import Collected, collect, fuse_collected, stubbed_groups  # noqa: E402
+from m4_rank.weights import (  # noqa: E402
+    SIGNALS, active_signals, canonical_config, format_weights, load_weights, signals_used, weights_source,
+)
 
 DEFAULT_CONFIGS = "b0,b1,full"
 
@@ -54,11 +56,6 @@ def usable_queries(queries: list[Query], qrels: Mapping[str, Mapping[str, int]],
     chosen = [q for q in queries if q.split == split]
     keep = [q for q in chosen if qrels.get(q.qid)]
     return keep, [q.qid for q in chosen if not qrels.get(q.qid)]
-
-
-def signals_used(weights_by_config: Mapping[str, Mapping[str, float]], names: list[str]) -> tuple[str, ...]:
-    """Union of the signals that any of the named configs gives a weight to, in canonical order."""
-    return tuple(s for s in SIGNALS if any(s in active_signals(weights_by_config[n]) for n in names))
 
 
 def collect_all(
@@ -92,10 +89,6 @@ def evaluate_configs(
 
 def _fmt(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.3f}"
-
-
-def _weights_text(w: Mapping[str, float]) -> str:
-    return "/".join(f"{w[s]:.2f}" for s in SIGNALS)
 
 
 def summary_rows(
@@ -139,7 +132,7 @@ def render_markdown(
     lines += ["| " + " | ".join(header) + " |", "|" + "|".join("---" for _ in header) + "|"]
     for name, per_query in results.items():
         agg = aggregate(per_query)
-        cells = [name, _weights_text(weights[name]), *(_fmt(agg[m][0]) for m in METRIC_NAMES)]
+        cells = [name, format_weights(weights[name]), *(_fmt(agg[m][0]) for m in METRIC_NAMES)]
         lines.append("| " + " | ".join(cells) + " |")
     lines += ["", "Weights source: " + "; ".join(f"{n}: {s}" for n, s in sources.items()) + "."]
     lines += [
@@ -218,8 +211,14 @@ def write_outputs(
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cfg = load_config()
+    if args.bootstrap < 1:
+        print("--bootstrap must be at least 1.")
+        return 2
     try:
-        names = [canonical_config(n, cfg) for n in args.configs.split(",") if n.strip()]
+        names = list(dict.fromkeys(canonical_config(n, cfg) for n in args.configs.split(",") if n.strip()))
+        if not names:
+            print("--configs must name at least one system (b0, b1, full).")
+            return 2
         queries = load_queries()
         if not queries:
             print("No queries in eval/queries.jsonl. The judged query set is written by hand (see eval/README.md); "
@@ -240,8 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     signals = signals_used(weights, names)
 
     providers = load_providers(cfg)
-    # rel is always collected (it supplies the candidates), so the search group always counts
-    stubbed = sorted(SIGNAL_GROUP[s] for s in {"rel", *signals} if SIGNAL_GROUP[s] in providers.stubbed)
+    stubbed = stubbed_groups(providers, signals)
     if stubbed and not args.allow_stubs:
         print("Refusing to run: these providers are fixed-value stubs, so the numbers would not be results: "
               + ", ".join(stubbed) + ".\nFinish the real functions and set their `stubs:` switches to false in "
@@ -253,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"*** STUB RUN ({', '.join(stubbed)}): exercising the pipeline only; these numbers are not results. ***")
 
     tuned_now = False
+    dev_collected: dict[str, Collected] = {}  # kept so a dev evaluation after tuning does not call the providers again
     if args.tune:
         dev, dev_skipped = usable_queries(queries, qrels, "dev")
         if dev_skipped:
@@ -267,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                 new[n] = res.best.weights
                 print(f"\ntuned {n} on {res.n_queries} dev queries ({res.grid_size} weight vectors), objective {res.objective}:")
                 for t in res.trials[:5]:
-                    print(f"  {_weights_text(t.weights)}  {args.objective}={t.score:.4f}")
+                    print(f"  {format_weights(t.weights)}  {args.objective}={t.score:.4f}")
         except TuningError as exc:
             print(f"Tuning problem: {exc}")
             return 2
@@ -284,7 +283,10 @@ def main(argv: list[str] | None = None) -> int:
     if not queries_in_split:
         print(f"No {split} queries with judgements: nothing to evaluate.")
         return 2
-    collected = collect_all(queries_in_split, signals, providers, cfg)
+    reusable = {qid: c for qid, c in dev_collected.items() if set(signals) <= set(c.signals)}
+    missing = [q for q in queries_in_split if q.qid not in reusable]
+    collected = {**{q.qid: reusable[q.qid] for q in queries_in_split if q.qid in reusable},
+                 **collect_all(missing, signals, providers, cfg)}
     results = evaluate_configs(weights, collected, queries_in_split, qrels, overruled, cfg)
     markdown = render_markdown(split, queries_in_split, skipped, results, weights, sources, providers, cfg,
                                len(overruled), tuned_now, args.bootstrap)

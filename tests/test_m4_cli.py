@@ -69,6 +69,43 @@ def test_bad_input_and_unbuilt_modules_are_clean_failures(make_providers, capsys
     assert "not built yet" in capsys.readouterr().err
 
 
+def test_text_from_other_modules_cannot_break_the_layout(make_providers, scenario, capsys):
+    # an explanation containing the piece separator and a newline, and an evidence label/citation with separators too
+    scenario["B"]["why"] = "IPC 302 | BNS 103 split\nacross two lines"
+    scenario["A"]["evidence"] = [{"citing_doc": "Z | Y", "label": "overruled", "sentence": "s"}]
+    assert run(["murder", "-k", "4"], make_providers(scenario)) == 0
+    out = capsys.readouterr().out
+    assert "IPC 302 / BNS 103 split across two lines" in out and "overruled per Z / Y" in out
+    assert "split\nacross" not in out
+    # every line under a result is either a signal line or an evidence line, never a mangled fragment
+    for line in out.splitlines():
+        if line.startswith("      ") and "evidence:" not in line:
+            assert line.split()[0] in ("rel", "cont", "health", "auth"), line
+
+
+def test_render_survives_a_piece_that_is_not_a_signal_line():
+    from common.schema import Result
+
+    r = Result("X", 0.5, 0.5, 0.5, 0.5, 0.5, "rel 0.50 x 0.50 = 0.250 | something else entirely")
+    out = cli.render([r], {})
+    assert "rel    [" in out and "      something else entirely" in out
+
+
+def test_verbose_with_an_unbuilt_statute_module_does_not_crash(make_providers, capsys):
+    from common.providers import Providers
+
+    good = make_providers()
+
+    def unbuilt(query, offence_date=None):
+        raise NotImplementedError("M2: parse_query() is not implemented yet.")
+
+    broken = Providers(good.search, unbuilt, good.continuity, good.health, good.authority, frozenset())
+    assert run(["murder", "--config", "b0", "--verbose", "-k", "2"], broken) == 0
+    assert "query statutes: not used by this config" in capsys.readouterr().out
+    assert run(["murder", "--config", "full", "--verbose", "-k", "2"], broken) == 2  # full genuinely needs M2
+    assert "not built yet" in capsys.readouterr().err
+
+
 def test_contract_violation_is_reported(make_providers, scenario, capsys):
     scenario["A"]["health"] = 2.0
     assert run(["murder"], make_providers(scenario)) == 3

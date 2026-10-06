@@ -69,6 +69,17 @@ def test_active_signals_in_canonical_order():
     assert active_signals({"auth": 0.1, "rel": 0.5, "health": 0.0, "cont": 0.4}) == ("rel", "cont", "auth")
 
 
+def test_signals_used_and_format_weights():
+    from m4_rank.weights import format_weights, signals_used
+
+    w = {n: load_weights(n) for n in ("b0", "b1", "full")}
+    assert signals_used(w, ["b0"]) == ("rel",)
+    assert signals_used(w, ["b0", "b1"]) == ("rel", "cont")
+    assert signals_used(w, ["full", "b0"]) == ("rel", "cont", "health", "auth")
+    assert signals_used(w, []) == ()
+    assert format_weights(w["full"]) == "0.50/0.20/0.20/0.10" and format_weights(w["b0"]) == "1.00/0.00/0.00/0.00"
+
+
 def test_canonical_config_resolves_alias_and_rejects_unknown():
     assert canonical_config("B2") == "full"
     assert canonical_config(" b0 ") == "b0"
@@ -119,6 +130,8 @@ def mutated(section, key, value):
         ("ranking", "normalize", {"rel": "minmaxx", "cont": "identity", "health": "identity", "auth": "minmax"}, "must be one of"),
         ("ranking", "configs", {"b0": {"rel": 1.0}, "b1": {"rel": 1.0, "cont": 1.0}}, "full is missing"),
         ("ranking", "configs", {"b0": {"rel": 1.0}, "b1": {"rel": -1.0}, "full": {"rel": 1.0}}, ">= 0"),
+        ("ranking", "configs", {"b0": {"rel": 1.0}, "b1": {"rel": 1.0, "cont": 1.0}, "full": {"cont": 1.0, "health": 1.0}},
+         "needs a positive rel weight"),
         ("ranking", "candidates", 5, "candidates must be >= evaluation.depth"),
         ("ranking", "max_evidence", None, "max_evidence is missing"),
         ("evaluation", "depth", 9, "depth must be >= 10"),

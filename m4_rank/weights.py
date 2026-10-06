@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import yaml
 
@@ -42,7 +42,9 @@ def validate_ranking_config(cfg: dict[str, Any]) -> None:
         if name not in r["configs"]:
             raise WeightsError(f"ranking.configs must define b0, b1 and full; {name} is missing")
     for name, raw in r["configs"].items():
-        normalise_weights(raw)
+        if normalise_weights(raw)["rel"] <= 0:
+            raise WeightsError(f"ranking.configs.{name} needs a positive rel weight: candidates always come from search(), "
+                               "so every system keeps text relevance in its score")
     if int(r["candidates"]) < 1 or int(r["max_evidence"]) < 0:
         raise WeightsError("ranking.candidates must be >= 1 and ranking.max_evidence >= 0")
     for key in ("depth", "relevant_threshold", "gain", "seed"):
@@ -85,6 +87,16 @@ def normalise_weights(raw: Mapping[str, float]) -> dict[str, float]:
 def active_signals(weights: Mapping[str, float]) -> tuple[str, ...]:
     """Signals with a positive weight, in canonical order."""
     return tuple(s for s in SIGNALS if weights.get(s, 0.0) > 0)
+
+
+def signals_used(weights_by_config: Mapping[str, Mapping[str, float]], names: Sequence[str]) -> tuple[str, ...]:
+    """Union of the signals that any of the named configs gives a weight to, in canonical order."""
+    return tuple(s for s in SIGNALS if any(s in active_signals(weights_by_config[n]) for n in names))
+
+
+def format_weights(weights: Mapping[str, float]) -> str:
+    """`0.50/0.20/0.20/0.10`, in the order rel/cont/health/auth."""
+    return "/".join(f"{weights[s]:.2f}" for s in SIGNALS)
 
 
 def tuned_path(cfg: dict[str, Any] | None = None) -> Path:

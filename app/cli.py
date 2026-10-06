@@ -26,7 +26,7 @@ from common.providers import Providers, load_providers  # noqa: E402
 from common.schema import Result  # noqa: E402
 from m4_rank.explain import split_explanation  # noqa: E402
 from m4_rank.rank import ContractViolation, rank  # noqa: E402
-from m4_rank.weights import active_signals, canonical_config, load_weights, weights_source  # noqa: E402
+from m4_rank.weights import SIGNALS, active_signals, canonical_config, load_weights, weights_source  # noqa: E402
 
 BAR_WIDTH = 20
 NOTE = (
@@ -46,14 +46,17 @@ def banner(stubbed: list[str]) -> str:
             "This output is NOT a result. ***")
 
 
-def render(results: list[Result], meta: dict, weights: dict[str, float]) -> str:
+def render(results: list[Result], meta: dict) -> str:
     lines: list[str] = []
     for i, r in enumerate(results, start=1):
         label = describe(meta.get(r.doc_id))
         lines.append(f"{i:>2}. {r.doc_id}   final {r.final:.3f}" + (f"   {label}" if label else ""))
         for piece in split_explanation(r.explanation):
             name = piece.split(" ", 1)[0]
-            lines.append(f"      {name:<6} {bar(getattr(r, name))}  {piece[len(name) + 1:]}")
+            if name in SIGNALS:
+                lines.append(f"      {name:<6} {bar(getattr(r, name))}  {piece[len(name) + 1:]}")
+            else:  # never trust text that came from another module to look like a signal line
+                lines.append(f"      {piece}")
         for ev in r.evidence:
             quoted = textwrap.shorten(ev["sentence"], width=220, placeholder=" ...")
             lines.append(f"      evidence: {ev['label']} in {ev['citing_doc']}: \"{quoted}\"")
@@ -70,6 +73,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--verbose", action="store_true", help="also show the query parse, weights and raw signals")
     ap.add_argument("--json", action="store_true", help="print results as JSON on stdout")
     return ap.parse_args(argv)
+
+
+def describe_query_statutes(args: argparse.Namespace, providers: Providers, used: list[str]) -> str:
+    """The parsed statutes for --verbose. Only meaningful when the config uses them; never fails the demo."""
+    if "cont" not in used and "health" not in used:
+        return "query statutes: not used by this config"
+    try:
+        qs = providers.parse_query(args.query, args.offence_date)
+    except NotImplementedError as exc:
+        return f"query statutes: unavailable ({exc})"
+    refs = ", ".join(f"{r.act} {r.section}" + (f" -> {r.offence_id}" if r.offence_id else "") for r in qs.refs) or "none found"
+    lines = [f"query statutes: governing act {qs.governing_act or 'unknown'}; sections: {refs}"]
+    lines += [f"  note: {note}" for note in qs.notes]
+    return "\n".join(lines)
 
 
 def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
@@ -93,7 +110,7 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
         print(f"Invalid input: {exc}", file=sys.stderr)
         return 2
 
-    used = [s for s in ("rel", "cont", "health", "auth") if s in active_signals(weights)]
+    used = [s for s in SIGNALS if s in active_signals(weights)]
     stubbed = providers.stubbed_signals(used)
     meta = load_doc_meta()
 
@@ -110,18 +127,14 @@ def run(args: argparse.Namespace, providers: Providers | None = None) -> int:
     if stubbed:
         print(banner(stubbed) + "\n")
     if args.verbose:
-        qs = providers.parse_query(args.query, args.offence_date)
-        refs = ", ".join(f"{r.act} {r.section}" + (f" -> {r.offence_id}" if r.offence_id else "") for r in qs.refs) or "none found"
         print(f"providers: {providers.describe()}")
         print(f"weights from {weights_source(config, cfg)}: " + ", ".join(f"{s} {weights[s]:.2f}" for s in used))
-        print(f"query statutes: governing act {qs.governing_act or 'unknown'}; sections: {refs}")
-        for note in qs.notes:
-            print(f"  note: {note}")
+        print(describe_query_statutes(args, providers, used))
         print()
     if not results:
         print("No results.")
     else:
-        print(render(results, meta, weights))
+        print(render(results, meta))
         if args.verbose:
             print("raw signals before normalisation:")
             for r in results:

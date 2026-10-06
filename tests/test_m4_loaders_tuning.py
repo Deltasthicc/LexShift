@@ -5,8 +5,18 @@ import yaml
 
 from common.config import load_config
 from common.schema import Query
-from eval.loaders import EvalDataError, load_overruled, load_qrels, load_queries
-from eval.tuning import TuningError, save_tuned, simplex_grid, tune_config
+from eval.loaders import (
+    EvalDataError,
+    judged_without,
+    judging_root,
+    load_overruled,
+    load_qrels,
+    load_queries,
+    read_table,
+    valid_round_name,
+    write_table,
+)
+from eval.tuning import TuningError, check_step, save_tuned, simplex_grid, tune_config
 from m4_rank.rank import collect
 from m4_rank.weights import SIGNALS, load_weights, normalise_weights
 
@@ -55,6 +65,52 @@ def test_overruled_list(tmp_path):
         load_overruled(write(tmp_path / "e.csv", "overruled_doc_id,overruling_doc_id,point,source,verified_by\n,Z,x,y,L1\n"))
 
 
+def test_read_table_tolerates_a_byte_order_mark_short_rows_and_extra_cells(tmp_path):
+    path = tmp_path / "t.csv"
+    path.write_bytes(b"\xef\xbb\xbfqid,doc_id,grade\nq1,A,2\nq2,B\nq3,C,1,surplus,cells\n")
+    rows = read_table(path)
+    assert list(rows[0]) == ["qid", "doc_id", "grade"]  # no BOM glued to the first column name
+    assert rows == [{"qid": "q1", "doc_id": "A", "grade": "2"}, {"qid": "q2", "doc_id": "B", "grade": ""},
+                    {"qid": "q3", "doc_id": "C", "grade": "1"}]
+
+
+def test_write_table_is_atomic_and_uses_unix_line_endings(tmp_path):
+    path = tmp_path / "out" / "t.tsv"
+    assert write_table(path, ["a", "b"], [{"a": 1, "b": "x y"}, {"a": 2, "b": "z"}], delimiter="\t") == 2
+    assert path.read_bytes() == b"a\tb\n1\tx y\n2\tz\n"
+    assert not list(path.parent.glob("*.tmp"))
+    with pytest.raises(ValueError):
+        write_table(path, ["a"], [{"a": 1}, {"nope": 2}])  # fails half-way: the old file survives, no temp file is left
+    assert path.read_bytes() == b"a\tb\n1\tx y\n2\tz\n" and not list(path.parent.glob("*.tmp"))
+
+
+def test_qrels_with_a_short_row_or_a_bom_are_read_or_rejected_cleanly(tmp_path):
+    bom = tmp_path / "bom.tsv"
+    bom.write_bytes(b"\xef\xbb\xbfqid\tdoc_id\tgrade\nq1\tA\t2\n")
+    assert load_qrels(bom) == {"q1": {"A": 2}}
+    short = tmp_path / "short.tsv"
+    short.write_text("qid\tdoc_id\tgrade\nq1\tA\n", encoding="utf-8")
+    with pytest.raises(EvalDataError, match=r"short.tsv:2"):
+        load_qrels(short)
+    gold = tmp_path / "gold.csv"
+    gold.write_text("wrong_header\nA\n", encoding="utf-8")
+    with pytest.raises(EvalDataError, match="column is missing"):
+        load_overruled(gold)
+
+
+@pytest.mark.parametrize("name,ok", [("round1", True), ("r-2.a_b", True), ("../x", False), ("a/b", False), ("a\\b", False),
+                                     ("..", False), (".hidden", False), ("", False), ("has space", False)])
+def test_valid_round_name(name, ok):
+    assert valid_round_name(name) is ok
+
+
+def test_judged_without_and_judging_root():
+    qrels = {"a": {"d": 0}, "b": {"d": 1}, "c": {"d": 2}}
+    assert judged_without(qrels, ["a", "b", "c", "unjudged"], 1) == ["a"]
+    assert judged_without(qrels, ["a", "b", "c", "unjudged"], 2) == ["a", "b"]
+    assert judging_root().name == "judging" or judging_root().is_absolute()
+
+
 # ------------------------------------------------------------------------ grid
 def test_simplex_grid_covers_the_simplex_with_floors():
     full = list(simplex_grid(SIGNALS, 0.1, {"rel": 0.3}))
@@ -66,9 +122,40 @@ def test_simplex_grid_covers_the_simplex_with_floors():
     assert list(simplex_grid(("rel",), 0.1)) == [{"rel": 1.0}]
 
 
-def test_simplex_grid_rejects_a_step_that_does_not_divide_one():
+@pytest.mark.parametrize("step", [0.3, 0.0, -0.1, 1.5])
+def test_simplex_grid_rejects_a_step_that_does_not_divide_one(step):
     with pytest.raises(ValueError):
-        list(simplex_grid(SIGNALS, 0.3))
+        list(simplex_grid(SIGNALS, step))
+    with pytest.raises(ValueError):
+        check_step(step)
+
+
+def test_floors_that_cannot_be_met_give_an_empty_grid_not_a_crash():
+    assert list(simplex_grid(SIGNALS, 0.1, {"rel": 1.1})) == []
+    assert list(simplex_grid(SIGNALS, 0.1, {"rel": 0.6, "cont": 0.6})) == []
+    assert list(simplex_grid(("rel", "cont"), 0.1, {"rel": 1.0})) == [{"rel": 1.0, "cont": 0.0}]
+
+
+@pytest.mark.parametrize("kwargs", [{"floors": {"rel": 1.1}}, {"floors": {"rel": 0.7, "cont": 0.7}}, {"floors": {"rel": -0.1}},
+                                    {"step": 0.0}, {"step": 0.3}, {"step": -1.0}])
+def test_tuning_reports_unusable_step_and_floors_as_tuning_errors(make_providers, kwargs):
+    p = make_providers()
+    collected = {"q1": collect("murder", None, SIGNALS, providers=p)}
+    with pytest.raises(TuningError):
+        tune_config("full", collected, [dev_query()], {"q1": {"A": 2}}, None, **kwargs)
+
+
+def test_the_cheap_ranking_path_gives_the_same_order_as_the_full_one(make_providers):
+    from m4_rank.fusion import fuse, normalized_columns, rank_ids
+    from m4_rank.rank import collect as collect_signals
+
+    p = make_providers()
+    rows = collect_signals("q", None, SIGNALS, providers=p).rows
+    norm = load_config()["ranking"]["normalize"]
+    columns = normalized_columns(rows, norm)
+    for vector in simplex_grid(SIGNALS, 0.25, {"rel": 0.25}):
+        assert rank_ids(rows, vector, columns, 4) == [r.doc_id for r in fuse(rows, vector, norm, 4)]
+        assert rank_ids(rows, vector, columns, 2) == [r.doc_id for r in fuse(rows, vector, norm, 2, columns=columns)]
 
 
 # ---------------------------------------------------------------------- tuning

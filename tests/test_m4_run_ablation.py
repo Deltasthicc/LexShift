@@ -128,6 +128,41 @@ def test_tune_alone_reports_dev_and_flags_it_as_optimistic(workspace):
     assert "optimistic" in md and not (workspace["results"] / "ablation_test.md").exists()
 
 
+def test_tuning_then_a_dev_report_does_not_call_the_providers_twice(workspace):
+    providers = workspace["providers"]
+    assert run_ablation.main(["--tune", "--no-plots"]) == 0  # two dev queries
+    assert providers.calls["search"] == 2  # tuned and evaluated on the same collected signals
+
+
+def test_tuning_then_a_test_report_collects_each_query_once(workspace):
+    providers = workspace["providers"]
+    assert run_ablation.main(["--tune", "--split", "test", "--no-plots"]) == 0  # 2 dev + 2 judged test queries
+    assert providers.calls["search"] == 4
+
+
+@pytest.mark.parametrize("args,message", [
+    (["--configs", ","], "at least one system"),
+    (["--configs", ""], "at least one system"),
+    (["--bootstrap", "0"], "--bootstrap must be at least 1"),
+    (["--bootstrap", "-5"], "--bootstrap must be at least 1"),
+])
+def test_unusable_arguments_are_usage_errors(workspace, capsys, args, message):
+    assert run_ablation.main([*args, "--no-plots"]) == 2
+    assert message in capsys.readouterr().out
+    assert not workspace["results"].exists()
+
+
+@pytest.mark.parametrize("args", [["--min-rel", "1.1"], ["--step", "0"], ["--step", "0.3"], ["--min-rel", "-0.2"]])
+def test_unusable_tuning_arguments_are_reported_not_crashed_on(workspace, capsys, args):
+    assert run_ablation.main(["--tune", "--no-plots", *args]) == 2
+    assert "Tuning problem" in capsys.readouterr().out
+
+
+def test_duplicate_configs_are_collapsed(workspace):
+    assert run_ablation.main(["--configs", "b0,B0,b0", "--no-plots"]) == 0
+    assert [r["config"] for r in read_csv(workspace["results"] / "ablation_test.csv")] == ["b0"]
+
+
 def test_nothing_to_evaluate_is_reported_not_faked(workspace, capsys):
     (workspace["dir"] / "queries.jsonl").write_text("", encoding="utf-8")
     assert run_ablation.main(["--no-plots"]) == 2
@@ -156,6 +191,19 @@ def test_unknown_config_and_bad_qrels_are_clean_errors(workspace, capsys):
     (workspace["dir"] / "qrels.tsv").write_text("qid\tdoc_id\tgrade\nghost\tA\t2\n", encoding="utf-8")
     assert run_ablation.main(["--no-plots"]) == 2
     assert "unknown qid" in capsys.readouterr().out
+
+
+def test_a_chart_marks_undefined_metrics_instead_of_drawing_zero_bars(tmp_path):
+    pytest.importorskip("matplotlib")
+    from eval.plots import bar_chart
+
+    rows = [
+        {"config": "b0", "P@5": 0.6, "R@10": "", "MAP": "", "nDCG@10": 0.5, "harmful@10": ""},
+        {"config": "full", "P@5": 0.8, "R@10": "", "MAP": "", "nDCG@10": 0.7, "harmful@10": ""},
+    ]
+    assert bar_chart(rows, tmp_path / "c.png", "t") and (tmp_path / "c.png").stat().st_size > 1000
+    rows[0]["harmful@10"], rows[1]["harmful@10"] = 0.1, ""
+    assert bar_chart(rows, tmp_path / "d.png", "t")  # one defined, one undefined harmful value
 
 
 def test_chart_is_written_when_matplotlib_is_available(workspace):

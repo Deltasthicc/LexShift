@@ -121,6 +121,12 @@ def test_paired_bootstrap_is_seeded_and_brackets_the_mean():
     assert lo <= mean <= hi and n == 6
 
 
+@pytest.mark.parametrize("n_boot", [0, -3])
+def test_paired_bootstrap_needs_at_least_one_resample(n_boot):
+    with pytest.raises(ValueError, match="n_boot"):
+        paired_bootstrap({"q1": 0.5}, {"q1": 0.4}, n_boot=n_boot)
+
+
 def test_paired_bootstrap_without_shared_queries_is_none():
     assert paired_bootstrap({"q1": 0.5}, {"q2": 0.5}) is None
     assert paired_bootstrap({"q1": None}, {"q1": 0.5}) is None

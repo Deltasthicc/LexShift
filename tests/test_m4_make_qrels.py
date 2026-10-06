@@ -86,6 +86,58 @@ def test_disagreements_block_qrels_until_they_are_adjudicated(round1, capsys):
     assert {r["adjudicated"] for r in again} == {"1", "2"} and {r["note"] for r in again} == {"re-read the judgment together"}
 
 
+def test_a_broken_judge_file_never_wipes_typed_adjudications(round1, capsys):
+    ws, folder = round1
+    write_judge(folder, "judge1", agree)
+    write_judge(folder, "judge2", lambda q, d: 2 if (q, d) == ("dev1", "C") else agree(q, d))
+    assert make_qrels.main(["--round", "r1"]) == 2  # one disagreement, not adjudicated yet
+    dis = read_delimited(folder / "disagreements.csv")
+    dis[0]["adjudicated"], dis[0]["note"] = "1", "agreed after re-reading"
+    with open(folder / "disagreements.csv", "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(dis[0]))
+        w.writeheader()
+        w.writerows(dis)
+    typed = (folder / "disagreements.csv").read_bytes()
+    report = (folder / "agreement.md").read_bytes()
+
+    # judge 1's file is later damaged (renamed column), then blanked of a row
+    write_judge(folder, "judge1", agree, header=["qid", "doc_id", "score"])
+    assert make_qrels.main(["--round", "r1"]) == 2
+    assert "were not updated" in capsys.readouterr().out
+    assert (folder / "disagreements.csv").read_bytes() == typed and (folder / "agreement.md").read_bytes() == report
+
+    write_judge(folder, "judge1", agree)  # fixed again: the adjudication is still there and is used
+    assert make_qrels.main(["--round", "r1"]) == 0
+    assert load_qrels(ws.qrels_path)["dev1"]["C"] == 1
+
+
+def test_short_rows_are_reported_not_crashed_on(round1, capsys):
+    ws, folder = round1
+    write_judge(folder, "judge2", agree)
+    lines = (folder / "sheet_template.csv").read_text(encoding="utf-8").splitlines()
+    header = lines[0].split(",")
+    # judge 1's file has rows cut short after the doc_id column: grade and note cells are missing altogether
+    cut = [",".join(line.split(",")[: header.index("doc_id") + 1]) if i % 2 else line for i, line in enumerate(lines)]
+    (folder / "judge1.csv").write_text("\n".join(cut) + "\n", encoding="utf-8")
+    assert make_qrels.main(["--round", "r1"]) == 2
+    assert "have no grade yet" in capsys.readouterr().out
+
+
+def test_round_names_cannot_escape_the_judging_folder(eval_workspace, capsys):
+    for bad in ("../x", "a/b", ".."):
+        assert make_qrels.main(["--round", bad]) == 2
+        assert "plain folder name" in capsys.readouterr().out
+
+
+def test_qrels_are_written_atomically_with_unix_line_endings(round1):
+    ws, folder = round1
+    write_judge(folder, "judge1", agree)
+    write_judge(folder, "judge2", agree)
+    assert make_qrels.main(["--round", "r1"]) == 0
+    assert b"\r\n" not in ws.qrels_path.read_bytes() and ws.qrels_path.read_bytes().startswith(b"qid\tdoc_id\tgrade\n")
+    assert not list(ws.dir.glob("*.tmp")) and not list(folder.glob("*.tmp"))
+
+
 def test_missing_blank_added_duplicate_and_invalid_rows_are_all_rejected(round1, capsys):
     ws, folder = round1
     write_judge(folder, "judge2", agree)

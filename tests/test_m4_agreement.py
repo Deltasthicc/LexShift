@@ -49,6 +49,13 @@ def test_confusion_matrix_and_input_validation():
         cohens_kappa(A, B, weights="linear")
 
 
+def test_kappa_needs_at_least_two_labels():
+    with pytest.raises(ValueError, match="two possible labels"):
+        cohens_kappa([1], [1], labels=(1,), weights="quadratic")
+    with pytest.raises(ValueError):
+        cohens_kappa([1], [1], labels=(1,))
+
+
 def test_agreement_report_collects_everything():
     r = agreement_report(A, B)
     assert r["n"] == 6 and r["agreement"] == pytest.approx(5 / 6)

@@ -16,7 +16,6 @@ paths:                              # relative to the repository root
   queries: eval/queries.jsonl                      # M4, hand-written
   qrels: eval/qrels.tsv                            # M4, hand-judged
   gold_overrulings: eval/gold_overrulings.csv      # M4, hand-verified, used only for harmful@k
-  judging_dir: eval/judging                        # M4, pooled sheets and the two judges' grades, one folder per round
   results_dir: eval/results
 
 # Stub switches. true  = use the fixed-value stub in stubs/fixed.py (the signal is NOT real).
@@ -66,6 +65,7 @@ ranking:                            # owner: M4
 
 evaluation:                         # owner: M4
   depth: 20                         # evaluate the top-20: the qrels pool is the union of the top-20 of every system
+  judging_dir: eval/judging         # pooled sheets and the two judges' grades, one folder per round
   relevant_threshold: 1             # grade >= 1 counts as relevant for P@k, R@k and MAP
   gain: exp                         # nDCG gain: exp = 2**grade - 1, linear = grade
   seed: 0

@@ -20,7 +20,8 @@ import yaml
 from common.config import load_config
 from common.schema import Query
 from eval.metrics import OBJECTIVES, aggregate, evaluate_query
-from m4_rank.rank import Collected, fuse_collected
+from m4_rank.fusion import normalized_columns, rank_ids
+from m4_rank.rank import Collected
 from m4_rank.weights import SIGNALS, active_signals, canonical_config, normalise_weights, tuned_path
 
 
@@ -28,13 +29,23 @@ class TuningError(RuntimeError):
     """Tuning was asked to do something that would invalidate the evaluation."""
 
 
+def check_step(step: float) -> int:
+    """The number of grid units (1/step) if `step` is in (0, 1] and divides 1 exactly, else ValueError."""
+    if not 0 < step <= 1:
+        raise ValueError(f"step must be in (0, 1] and divide 1 exactly, got {step}")
+    units = round(1.0 / step)
+    if abs(units * step - 1.0) > 1e-9:
+        raise ValueError(f"step must divide 1 exactly, got {step}")
+    return units
+
+
 def simplex_grid(
     signals: Sequence[str], step: float = 0.1, floors: Mapping[str, float] | None = None
 ) -> Iterator[dict[str, float]]:
-    """Every weight vector over `signals` with multiples of `step` summing to 1 and each weight >= its floor."""
-    units = round(1.0 / step)
-    if abs(units * step - 1.0) > 1e-9 or units < 1:
-        raise ValueError(f"step must divide 1 exactly, got {step}")
+    """Every weight vector over `signals` with multiples of `step` summing to 1 and each weight >= its floor.
+
+    Yields nothing if the floors cannot all be met (they sum to more than 1)."""
+    units = check_step(step)
     floors = floors or {}
     min_units = [math.ceil(floors.get(s, 0.0) / step - 1e-9) for s in signals]
 
@@ -102,17 +113,30 @@ def tune_config(
     depth = int(cfg["evaluation"]["depth"])
     threshold = int(cfg["evaluation"]["relevant_threshold"])
     gain = str(cfg["evaluation"]["gain"])
+    floors = dict(floors or {})
+    try:
+        check_step(step)
+    except ValueError as exc:
+        raise TuningError(str(exc)) from exc
+    if any(not 0 <= f <= 1 for f in floors.values()) or sum(floors.get(s, 0.0) for s in signals) > 1 + 1e-9:
+        raise TuningError(f"the weight floors {floors} cannot be met: each must be in [0, 1] and together they must not exceed 1")
+
+    # normalisation does not depend on the weights: do it once per query, then only re-score for each grid point
+    normalize_cfg = cfg["ranking"]["normalize"]
+    columns = {q.qid: normalized_columns(collected[q.qid].rows, normalize_cfg) for q in queries}
 
     trials: list[Trial] = []
     for vector in simplex_grid(signals, step, floors):
         weights = {s: vector.get(s, 0.0) for s in SIGNALS}
         per_query: dict[str, dict[str, float | None]] = {}
         for q in queries:
-            ranked = [r.doc_id for r in fuse_collected(collected[q.qid], weights, depth, cfg)]
+            ranked = rank_ids(collected[q.qid].rows, weights, columns[q.qid], depth)
             per_query[q.qid] = evaluate_query(
                 ranked, qrels[q.qid], overruled, depth=depth, threshold=threshold, gain=gain
             )
         trials.append(Trial(weights, _objective(per_query, objective), per_query))
+    if not trials:
+        raise TuningError(f"no weight vector satisfies the floors {floors} at step {step}")
 
     def distance(t: Trial) -> float:
         return sum(abs(t.weights[s] - start[s]) for s in SIGNALS)

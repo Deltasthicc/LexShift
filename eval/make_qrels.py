@@ -10,7 +10,8 @@ Inputs, in eval/judging/<round>/ :
 
 Rules the tool enforces: each judge file contains exactly the template's rows (none missing, added or duplicated), every grade
 is 0, 1 or 2, and every disagreement has an adjudicated grade. Otherwise qrels.tsv is NOT written (--allow-incomplete writes
-only the settled rows). Grades already in qrels.tsv are never changed.
+only the settled rows). Grades already in qrels.tsv are never changed. While a judge file has problems, disagreements.csv and
+agreement.md are left alone, so a broken file can never wipe adjudications that were already typed in.
 
 Outputs: eval/qrels.tsv (merged with earlier rounds), <round>/disagreements.csv, <round>/agreement.md (percent agreement and
 Cohen's kappa for the report).
@@ -21,7 +22,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import sys
-from collections import defaultdict
 from pathlib import Path
 from typing import Mapping
 
@@ -30,10 +30,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from common.config import load_config, resolve_path  # noqa: E402
-from common.io import read_delimited, write_delimited  # noqa: E402
 from common.schema import GRADES, QRELS_COLUMNS  # noqa: E402
 from eval.agreement import LABELS, agreement_report  # noqa: E402
-from eval.loaders import EvalDataError, load_qrels, load_queries  # noqa: E402
+from eval.loaders import (  # noqa: E402
+    EvalDataError, judged_without, judging_root, load_qrels, load_queries, read_table, valid_round_name, write_table,
+)
 
 Pair = tuple[str, str]  # (qid, doc_id)
 DISAGREEMENT_COLUMNS = ("qid", "query", "doc_id", "title", "grade_judge1", "grade_judge2", "adjudicated", "note")
@@ -46,10 +47,10 @@ class QrelsBuildError(ValueError):
 def read_template(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         raise QrelsBuildError(f"{path} not found: run `python -m eval.pool --round <name>` first")
-    rows = read_delimited(path)
+    rows = read_table(path)
     seen: set[Pair] = set()
     for row in rows:
-        pair = (row["qid"], row["doc_id"])
+        pair = (row.get("qid", ""), row.get("doc_id", ""))
         if pair in seen:
             raise QrelsBuildError(f"{path}: duplicate row {pair}")
         seen.add(pair)
@@ -71,13 +72,12 @@ def _parse_grade(raw: str | None) -> int | None:
 
 def read_judge_file(path: Path, expected: set[Pair]) -> tuple[dict[Pair, int], list[str]]:
     """The grades in one judge's file and a list of problems (wrong rows, bad or missing grades)."""
-    rows = read_delimited(path)
+    rows = read_table(path)
     problems: list[str] = []
     if rows and not {"qid", "doc_id", "grade"} <= set(rows[0]):
         return {}, [f"{path.name}: needs the columns qid, doc_id and grade"]
     grades: dict[Pair, int] = {}
     seen: set[Pair] = set()
-    invalid: set[Pair] = set()  # rows that already have their own error message
     blank: list[Pair] = []
     for lineno, row in enumerate(rows, start=2):
         pair = (row["qid"].strip(), row["doc_id"].strip())
@@ -92,7 +92,6 @@ def read_judge_file(path: Path, expected: set[Pair]) -> tuple[dict[Pair, int], l
             grade = _parse_grade(row.get("grade"))
         except ValueError as exc:
             problems.append(f"{path.name}:{lineno}: {pair}: {exc}")
-            invalid.add(pair)
             continue
         if grade is None:
             blank.append(pair)
@@ -110,13 +109,13 @@ def load_adjudications(path: Path) -> dict[Pair, tuple[int, str]]:
     if not path.exists():
         return {}
     out: dict[Pair, tuple[int, str]] = {}
-    for lineno, row in enumerate(read_delimited(path), start=2):
+    for lineno, row in enumerate(read_table(path), start=2):
         try:
             grade = _parse_grade(row.get("adjudicated"))
         except ValueError as exc:
             raise QrelsBuildError(f"{path.name}:{lineno}: {exc}") from exc
         if grade is not None:
-            out[(row["qid"], row["doc_id"])] = (grade, row.get("note", ""))
+            out[(row.get("qid", ""), row.get("doc_id", ""))] = (grade, row.get("note", ""))
     return out
 
 
@@ -154,13 +153,6 @@ def merge_qrels(existing: Mapping[str, Mapping[str, int]], new: Mapping[Pair, in
 
 def qrels_rows(qrels: Mapping[str, Mapping[str, int]]) -> list[dict[str, object]]:
     return [{"qid": qid, "doc_id": doc, "grade": qrels[qid][doc]} for qid in sorted(qrels) for doc in sorted(qrels[qid])]
-
-
-def per_query_summary(qrels: Mapping[str, Mapping[str, int]], qids: list[str]) -> tuple[list[str], list[str]]:
-    """Judged queries with no relevant document (recall and AP undefined) and with no grade-2 document."""
-    no_relevant = [q for q in qids if q in qrels and not any(g >= 1 for g in qrels[q].values())]
-    no_good = [q for q in qids if q in qrels and not any(g == 2 for g in qrels[q].values())]
-    return no_relevant, no_good
 
 
 def _pct(x: float | None) -> str:
@@ -203,10 +195,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cfg = load_config()
+    if not valid_round_name(args.round):
+        print(f"--round must be a plain folder name (letters, digits, '.', '-', '_'), got {args.round!r}.")
+        return 2
     if args.round.startswith("stub_"):
         print("A stub round is not a judging round and cannot produce qrels.")
         return 2
-    round_dir = (Path(args.out) if args.out else resolve_path("judging_dir", cfg)) / args.round
+    round_dir = (Path(args.out) if args.out else judging_root(cfg)) / args.round
     try:
         queries = load_queries()
         known = {q.qid for q in queries}
@@ -237,23 +232,27 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     final, disagreements, unresolved = reconcile(g1, g2, adjudicated)
 
-    ctx = {(r["qid"], r["doc_id"]): r for r in template}
-    qtext = {q.qid: q.text for q in queries}
-    write_delimited(dis_path, DISAGREEMENT_COLUMNS, [
-        {"qid": qid, "query": qtext.get(qid, ""), "doc_id": doc, "title": ctx[(qid, doc)].get("title", ""),
-         "grade_judge1": g1[(qid, doc)], "grade_judge2": g2[(qid, doc)],
-         "adjudicated": adjudicated[(qid, doc)][0] if (qid, doc) in adjudicated else "",
-         "note": adjudicated[(qid, doc)][1] if (qid, doc) in adjudicated else ""}
-        for qid, doc in disagreements
-    ])
-    (round_dir / "agreement.md").write_text(
-        render_agreement(args.round, report, len(disagreements), len(disagreements) - len(unresolved)),
-        encoding="utf-8", newline="\n")
-
     print(f"{report['n']} documents graded by both judges; agreement {_pct(report['agreement'])}; "
           f"kappa {_num(report['kappa'])} (quadratic-weighted {_num(report['kappa_quadratic'])}).")
-    if disagreements:
-        print(f"{len(disagreements)} disagreement(s) written to {dis_path}; {len(unresolved)} still need an `adjudicated` grade.")
+    if problems:
+        # The comparison is partial while a judge file has problems: leave disagreements.csv and agreement.md untouched, so a
+        # broken file can never wipe adjudications that were already typed in.
+        print("Judge files have problems, so disagreements.csv and agreement.md were not updated.")
+    else:
+        ctx = {(r["qid"], r["doc_id"]): r for r in template}
+        qtext = {q.qid: q.text for q in queries}
+        write_table(dis_path, DISAGREEMENT_COLUMNS, [
+            {"qid": qid, "query": qtext.get(qid, ""), "doc_id": doc, "title": ctx[(qid, doc)].get("title", ""),
+             "grade_judge1": g1[(qid, doc)], "grade_judge2": g2[(qid, doc)],
+             "adjudicated": adjudicated[(qid, doc)][0] if (qid, doc) in adjudicated else "",
+             "note": adjudicated[(qid, doc)][1] if (qid, doc) in adjudicated else ""}
+            for qid, doc in disagreements
+        ])
+        (round_dir / "agreement.md").write_text(
+            render_agreement(args.round, report, len(disagreements), len(disagreements) - len(unresolved)),
+            encoding="utf-8", newline="\n")
+        if disagreements:
+            print(f"{len(disagreements)} disagreement(s) written to {dis_path}; {len(unresolved)} still need an `adjudicated` grade.")
     incomplete = bool(problems or unresolved)
     if incomplete:
         for line in problems[:12]:
@@ -271,9 +270,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Cannot build qrels: {exc}")
         return 2
     qrels_path = resolve_path("qrels", cfg)
-    write_delimited(qrels_path, QRELS_COLUMNS, qrels_rows(merged), delimiter="\t")
+    write_table(qrels_path, QRELS_COLUMNS, qrels_rows(merged), delimiter="\t")
     print(f"Wrote {sum(len(d) for d in merged.values())} judgements for {len(merged)} queries to {qrels_path}.")
-    no_rel, no_good = per_query_summary(merged, sorted(merged))
+    no_rel, no_good = judged_without(merged, sorted(merged), 1), judged_without(merged, sorted(merged), 2)
     if no_rel:
         print(f"warning: no relevant document (grade >= 1) for {', '.join(no_rel)}: recall and AP are undefined for them.")
     if no_good:

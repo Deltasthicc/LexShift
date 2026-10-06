@@ -35,6 +35,8 @@ def cohens_kappa(
     """
     if weights not in (None, "quadratic"):
         raise ValueError("weights must be None or 'quadratic'")
+    if len(labels) < 2:
+        raise ValueError("kappa needs at least two possible labels")
     n = len(a)
     if n == 0:
         return None

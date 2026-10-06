@@ -17,11 +17,17 @@ def _health_reason(evidence: Sequence[Mapping[str, str]]) -> str:
 
 
 _STUB_TAG = " [STUB signals, not real:"
+_SEPARATOR = " | "
+
+
+def _clean(text: object) -> str:
+    """Make module-supplied text safe to embed: one line, and never containing the piece separator."""
+    return " ".join(str(text).replace("|", "/").split())
 
 
 def split_explanation(explanation: str) -> list[str]:
     """The per-signal pieces of an explanation, without the trailing stub tag (for line-by-line display)."""
-    return explanation.split(_STUB_TAG)[0].split(" | ")
+    return explanation.split(_STUB_TAG)[0].split(_SEPARATOR)
 
 
 def build_explanation(
@@ -48,8 +54,9 @@ def build_explanation(
             note = _health_reason(evidence)
         elif s == "auth":
             note = f"raw {raw['auth']:.2f}"
+        note = _clean(note)
         parts.append(f"{piece} ({note})" if note else piece)
-    text = " | ".join(parts)
+    text = _SEPARATOR.join(parts)
     if stubbed:
         text += f"{_STUB_TAG} {', '.join(stubbed)}]"
     return text

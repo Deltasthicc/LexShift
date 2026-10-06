@@ -197,6 +197,23 @@ def test_rank_raises_on_unsorted_or_duplicate_search_hits(make_providers):
         rank("q", None, k=2, config="b0", providers=dup_p)
 
 
+def test_stubbed_groups_always_counts_search_because_it_supplies_the_candidates(make_providers):
+    from m4_rank.rank import stubbed_groups
+
+    p = make_providers(stubbed={"search", "health"})
+    assert stubbed_groups(p, ("rel",)) == ["search"]
+    assert stubbed_groups(p, ("cont",)) == ["search"]  # rel is implied
+    assert stubbed_groups(p, ("cont", "health", "auth")) == ["health", "search"]
+    assert stubbed_groups(make_providers(), ("rel", "cont", "health", "auth")) == []
+    assert stubbed_groups(make_providers(stubbed={"authority", "statute"}), ("rel",)) == []
+
+
+def test_text_with_the_piece_separator_is_cleaned_in_explanations():
+    r = [SignalRow("A", {"rel": 1.0, "cont": 1.0}, cont_why="x | y\nz")]
+    out = fuse(r, {"rel": 0.5, "cont": 0.5, "health": 0.0, "auth": 0.0}, NORMALIZE, 1)[0]
+    assert "x / y z" in out.explanation and out.explanation.count(" | ") == 1 and "\n" not in out.explanation
+
+
 def test_collect_once_then_fuse_under_many_weight_vectors(make_providers):
     p = make_providers()
     collected = collect("q", None, ("rel", "cont", "health", "auth"), providers=p)
