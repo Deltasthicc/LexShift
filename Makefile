@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data docmeta download build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -11,6 +11,10 @@ help:
 	@echo "demo             ranked search: make demo QUERY='BNS 103 murder' ARGS='--offence-date 2025-01-10'"
 	@echo "eval             ablation table on the test split"
 	@echo "tune             tune fusion weights on the DEV split only"
+	@echo "pool             build the blind judge sheet: make pool ROUND=round1"
+	@echo "qrels            reconcile the two judges into eval/qrels.tsv: make qrels ROUND=round1"
+	@echo "check-data       check the hand-made queries, qrels and gold list against the plan"
+	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
 	@echo "download         M1: fetch the AWS Open Data judgments"
 	@echo "build-index      M1: judgments.jsonl and the search index"
 	@echo "build-statutes   M2: doc_statutes.jsonl"
@@ -34,6 +38,20 @@ eval:
 
 tune:
 	$(PY) -m eval.run_ablation --tune
+
+ROUND ?= round1
+
+pool:
+	$(PY) -m eval.pool --round $(ROUND) $(ARGS)
+
+qrels:
+	$(PY) -m eval.make_qrels --round $(ROUND)
+
+check-data:
+	$(PY) -m eval.check_data
+
+docmeta:
+	$(PY) -m app.docmeta
 
 download:
 	$(PY) -m m1_index.ingest download

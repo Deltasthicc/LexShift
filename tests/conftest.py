@@ -60,6 +60,61 @@ def write_config():
     return _write_config
 
 
+QUERY_ROWS = [
+    {"qid": "dev1", "text": "murder", "offence_date": "2025-01-10", "split": "dev", "type": "A"},
+    {"qid": "dev2", "text": "common intention", "offence_date": None, "split": "dev", "type": "C"},
+    {"qid": "test1", "text": "BNS 103", "offence_date": "2025-01-10", "split": "test", "type": "A"},
+    {"qid": "test2", "text": "section 103", "offence_date": "2020-06-01", "split": "test", "type": "D"},
+]
+
+
+class Workspace:
+    """A throwaway project root for the eval tools: temp config, temp data files, swappable fake providers."""
+
+    def __init__(self, root: Path, providers) -> None:
+        self.dir = root
+        self.providers = providers
+        self.judging = root / "judging"
+        self.results = root / "results"
+        self.qrels_path = root / "qrels.tsv"
+        self.queries_path = root / "queries.jsonl"
+        self.gold_path = root / "gold.csv"
+        self.judgments_path = root / "judgments.jsonl"
+
+    def write_queries(self, rows=None) -> None:
+        import json
+
+        rows = QUERY_ROWS if rows is None else rows
+        self.queries_path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+    def write_qrels(self, rows) -> None:
+        """rows: iterable of (qid, doc_id, grade)."""
+        lines = ["qid\tdoc_id\tgrade"] + [f"{q}\t{d}\t{g}" for q, d, g in rows]
+        self.qrels_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def write_gold(self, doc_ids) -> None:
+        lines = ["overruled_doc_id,overruling_doc_id,point,source,verified_by"] + [f"{d},Z,a point,a judgment,L1" for d in doc_ids]
+        self.gold_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.fixture
+def eval_workspace(tmp_path, write_config, monkeypatch, make_providers):
+    ws = Workspace(tmp_path, make_providers())
+    cfg_path = write_config(tmp_path / "config.yaml", {
+        "paths": {"queries": str(ws.queries_path), "qrels": str(ws.qrels_path), "gold_overrulings": str(ws.gold_path),
+                  "judging_dir": str(ws.judging), "results_dir": str(ws.results), "judgments": str(ws.judgments_path)},
+        "ranking": {"use_tuned": False, "tuned_file": str(tmp_path / "weights_tuned.yaml")},
+    })
+    monkeypatch.setenv("LEXSHIFT_CONFIG", str(cfg_path))
+    import eval.pool as pool
+    import eval.run_ablation as run_ablation
+
+    for module in (pool, run_ablation):
+        monkeypatch.setattr(module, "load_providers", lambda cfg=None: ws.providers)
+    ws.write_queries()
+    return ws
+
+
 @pytest.fixture
 def make_providers():
     def factory(table=None, *, stubbed=(), offence_ids=None):

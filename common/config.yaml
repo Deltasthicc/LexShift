@@ -16,6 +16,7 @@ paths:                              # relative to the repository root
   queries: eval/queries.jsonl                      # M4, hand-written
   qrels: eval/qrels.tsv                            # M4, hand-judged
   gold_overrulings: eval/gold_overrulings.csv      # M4, hand-verified, used only for harmful@k
+  judging_dir: eval/judging                        # M4, pooled sheets and the two judges' grades, one folder per round
   results_dir: eval/results
 
 # Stub switches. true  = use the fixed-value stub in stubs/fixed.py (the signal is NOT real).

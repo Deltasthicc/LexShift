@@ -46,8 +46,12 @@ def write_jsonl(path: str | os.PathLike, records: Iterable[dict[str, Any]]) -> i
 
 
 def read_delimited(path: str | os.PathLike, delimiter: str = ",") -> list[dict[str, str]]:
-    """Read a CSV/TSV with a header row into a list of dicts (all values are strings)."""
-    with open(path, "r", encoding="utf-8", newline="") as fh:
+    """Read a CSV/TSV with a header row into a list of dicts (all values are strings).
+
+    Reads `utf-8-sig`: spreadsheet programs save "CSV UTF-8" with a byte-order mark, which would otherwise end up glued to
+    the first column name. Files without a mark read exactly as before.
+    """
+    with open(path, "r", encoding="utf-8-sig", newline="") as fh:
         return list(csv.DictReader(fh, delimiter=delimiter))
 
 

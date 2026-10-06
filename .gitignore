@@ -33,6 +33,7 @@ data/cache/
 
 # Outputs of runs that used stub providers are never results
 eval/results/stub_*
+eval/judging/stub_*
 
 # Notebooks scratch
 .ipynb_checkpoints/
