@@ -46,7 +46,35 @@ m3_treatment:
     overruled: 0.1
     doubted: 0.6                    # doubted / criticised
     default: 1.0
-  pagerank: {damping: 0.85}         # textbook default, M3 may tune
+  pagerank: {damping: 0.85, tol: 1.0e-10, max_iter: 200}   # textbook damping; power iteration to convergence
+  # --- M3 pipeline settings (M3-owned files live here, not under the shared `paths:`) ---
+  mentions: data/processed/m3_mentions.jsonl   # intermediate: every mention with window, resolution, appeal flag
+  reports_dir: m3_treatment/reports            # resolution and classifier reports (committed)
+  labelling_dir: data/labelling                # blank sheets and labelled rounds for the gold set
+  window: {before: 1, after: 1, max_chars: 1500}
+  resolver:                         # see m3_treatment/resolver.py
+    name_threshold: 0.5
+    name_threshold_no_year: 0.75
+    ambiguity_margin: 0.1
+    year_window: 1
+    max_token_df: 0.02
+    min_stop_df: 5
+    range_name_agreement: 0.3
+  llm:                              # offline only; never imported by health()/authority()
+    model: gemini-2.5-flash         # any Gemini model id; the cache key includes it
+    cache: data/cache/m3_llm_labels.jsonl
+    batch_size: 10                  # windows per request
+    min_interval_s: 1.0             # pacing between requests (free-tier rate limits)
+    max_retries: 4
+    scope: resolved                 # resolved = only mentions linked to a corpus judgment (the only ones that move a score); all
+    few_shot_per_class: 2           # examples taken from the gold set's few-shot pool, excluded from evaluation
+  labels: llm                       # label source for citations.jsonl: llm | baseline
+  min_confidence: 0.5               # a negative label below this confidence does not lower health
+  authority:
+    edge_labels: [followed, neutral]   # Guide: PageRank over positive and neutral edges
+    max_bench: 7                    # bench weight = log(1 + bench) / log(1 + max_bench), capped at 1
+    unknown_bench: 2                # bench size assumed for the weight only when it is unknown (the commonest bench)
+  max_evidence: 5                   # evidence items stored per judgment
 
 ranking:                            # owner: M4
   candidates: 100                   # top-N taken from search() before re-ranking

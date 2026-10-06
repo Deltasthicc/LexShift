@@ -12,8 +12,9 @@ pytest>=8.0
 #                     nltk                     Porter stemmer only
 #                     awscli or boto3          public S3 bucket, unsigned
 #                     rank_bm25                sanity check against our own BM25 only, never in the live path
-# M3 (m3_treatment):  scikit-learn             tf-idf + logistic-regression baseline, Cohen's kappa
-#                     networkx                 PageRank (or implement power iteration ourselves)
-#                     an LLM client            offline few-shot labelling only, outputs cached, never at demo time
+# M3 (m3_treatment): in use. PageRank is our own power iteration (no networkx). The LLM client runs only in the
+#   offline labelling step (python -m m3_treatment.pipeline label-llm); nothing at demo time imports it.
+scikit-learn>=1.4        # M3: tf-idf + logistic-regression treatment baseline
+google-genai>=1.0        # M3: Gemini client for the offline few-shot treatment labels (cached)
 # M4 (m4_rank, eval): matplotlib               report graphs
 #                     streamlit                optional thin demo page
