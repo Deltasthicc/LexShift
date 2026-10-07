@@ -476,8 +476,10 @@ kept outside the repo, used only to exercise the pipeline; they are not results.
   missing; `gold merge` reads sheets saved by Excel as "CSV UTF-8" (byte-order mark); `python -m m3_treatment.scores`
   no longer triggers runpy's double-import warning (the package imports `scores` on first use).
 * **Pinned model (finding 9).** `gemini_caller` refuses a moving alias or preview id (`*-latest`, `*-preview`, `*-exp`),
-  and each cache row records the `model_version` that answered. The configured id stays `gemini-2.5-flash`, a stable
-  id that Google does not re-point. Google's model page (read 2026-10-07) says 2.5 access is now limited to projects that
+  and each cache row records the `model_version` that answered. The configured id is now `gemini-3.5-flash-lite`
+  (stable; temperature 1.0; 30 windows per request): on 2026-10-07 the free tier of `gemini-2.5-flash` stopped at its
+  20 requests a day after 160 of the 269 corpus windows, and `gemini-3.8-flash` returned 503 (high demand). All 269
+  labels in use come from one model (the cache key includes it), zero-shot until the gold set exists. Google's model page (read 2026-10-07) says 2.5 access is now limited to projects that
   used it before and recommends temperature 1.0 for Gemini 3. If the key is refused, set `llm.model` to a stable
   Gemini 3 id and `llm.temperature: 1.0`; the cache key includes the model, so nothing stale is reused.
 * **The label cache is committed (closes OQ-5).** It moved from the git-ignored `data/cache/` to

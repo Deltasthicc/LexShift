@@ -144,3 +144,13 @@ def test_appeal_cues_must_be_near_the_mention():
     s = under_appeal.index("Ramesh")
     ctx = appeal_context(under_appeal, s, s + 30, sentence_spans(under_appeal))
     assert is_appeal_history(ctx, "A v. B", "Ramesh Patil v. Suresh Jadhav", cited_is_sc=False)
+
+
+def test_a_title_without_its_respondent_still_matches_its_running_header():
+    """M1's 2024 titles lost the respondent ("Fuleshwar Gope v. v."); the header in the text still has it."""
+    from m3_treatment.windows import is_own_title
+
+    assert is_own_title("Fuleshwar Gope v. v.", "Fuleshwar Gope v. Union of India & Ors.")
+    assert is_own_title("Bilkis Yakub Rasool v. v.", "Bilkis Yakub Rasool v. Union of India & Others")
+    assert not is_own_title("Fuleshwar Gope v. v.", "Suresh Kumar Koushal v. Naz Foundation")
+    assert not is_own_title("Sanjay v. State of Uttar Pradesh", "Sanjay v. Union of India")  # a full title still checks

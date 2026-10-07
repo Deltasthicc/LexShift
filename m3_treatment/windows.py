@@ -139,6 +139,9 @@ def is_own_title(citing_title: str, name: str, common: frozenset[str] | set[str]
     first = next(iter(_ordered_tokens(split_parties(name)[1])), None)
     if first is None or first in title:
         return True
+    if not _ordered_tokens(split_parties(citing_title)[1]):
+        # The title lost its respondent ("Fuleshwar Gope v. v.", 259 of M1's 2024 titles): nothing to contradict.
+        return True
     initials = "".join(w[0] for side in split_parties(citing_title) for w in re.findall(r"[a-z0-9]+", side.lower()))
     return len(first) > 1 and first in initials
 
