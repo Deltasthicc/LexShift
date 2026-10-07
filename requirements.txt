@@ -22,4 +22,10 @@ nltk>=3.8                # M1: Porter stemmer and the English stop-word list (th
 #                     pymupdf                  PDF -> text
 #                     awscli or boto3          public S3 bucket, unsigned
 #                     rank_bm25                sanity check against our own BM25 only, never in the live path
-# M4 (m4_rank, eval): streamlit                optional thin demo page
+# M3 (m3_treatment):  scikit-learn             tf-idf + logistic-regression baseline, Cohen's kappa
+#                     networkx                 PageRank (or implement power iteration ourselves)
+#                     an LLM client            offline few-shot labelling only, outputs cached, never at demo time
+# M4 (m4_rank, eval): matplotlib               report graphs
+#                     streamlit                optional thin demo page
+
+nltk>=3.9
