@@ -484,6 +484,30 @@ kept outside the repo, used only to exercise the pipeline; they are not results.
   `data/llm_labels/m3_llm_labels.jsonl`. It is small (hash keys and labels, no judgment text), and with it anyone can
   rebuild `citations.jsonl` and `doc_health.jsonl` offline, without an API key, which is the frozen-output rule.
 
+### D-034 (2026-10-07) A minimal interface with one page per module, for the demo
+
+The D-028 interface (scrubbed statement, pinned split, accordion, carousel, scroll-linked motion) was too busy to present
+over. On branch `ui-refactor` it is replaced by five plain pages, one per owner: Search (all four signals, the formula
+with live weights, the BM25 / + continuity / all-four switch), Index (M1, one tab per pipeline stage, M1's 24-item list
+kept), Statutes (M2: `parse_query()` output, IPC/BNS changeover, continuity and rank change per result, the mapping table),
+Treatment (M3: corpus-wide label counts, the health and authority rules, the most cited judgments, per-result evidence) and
+Ranking (M4: weights per configuration, evaluation data and results, the judging workbench). `#/evaluation` still opens
+Ranking. Only GSAP and Flip are loaded (ScrollTrigger and ScrollToPlugin stay vendored but unused). One read-only endpoint
+was added, `/api/modules`, which returns M2's `statute_map.csv` and relation weights and counts over M3's
+`citations.jsonl` and `doc_health.jsonl`; it scores nothing. Measured on the 468-judgment corpus: 15,489 citation mentions,
+269 resolved, labels neutral 15,381 / followed 106 / distinguished 2, no negative label, so health is 1.0 for every
+judgment, and the Treatment page says so. Tests that pinned the old design were replaced by tests for the new structure.
+The Treatment page has one tab per M3 stage (find, resolve, window, classify, score), read from `m3_mentions.jsonl`,
+`citations.jsonl`, `doc_health.jsonl` and the labelling sheets (counted, never labelled), with M3's README list marked
+live (shown working) or built (in the code and tested). The page counts labels over resolved mentions only (M3 classifies only those, `llm.scope: resolved`; the 15,220
+unresolved mentions carry a default `neutral`) and shows M3's own authority, not the ranking's min-max rescaling of it.
+**Finding for M3 (not fixed here):** of the 193 resolved mentions whose raw text carries an SCR citation, 20 do not
+match the reporter citation of the judgment they were resolved to (7 of them labelled `followed`), spread over 7
+judgments. `2024_1_404_412_EN` ([2024] 1 SCR 404, M1 title "State of Haryana v. v.") received 8, all citations to other
+"... v. State of Haryana" judgments of 2023; `2024_10_393_410_EN` received 5. Both are in the top five by authority.
+The likely cause is name matching on incomplete titles; preferring a reporter-citation match when one is present
+would catch these.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

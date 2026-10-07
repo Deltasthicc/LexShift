@@ -1,7 +1,11 @@
-// The evaluation view: what the numbers are computed from, the checks on the hand-made files, and the results when they exist.
+// The Ranking page (M4): how the four signals are weighted in each configuration, what the evaluation is computed from, the checks on
+// the hand-made files, and the results when they exist.
 import { api } from "./api.js";
-import { $, $$, clear, f3, h, plural } from "./dom.js";
-import { animateIn, countUp, growMeters } from "./motion.js";
+import { $, clear, f2, f3, h, pct, plural, SIGNALS, SIGNAL_LABEL } from "./dom.js";
+import { animateIn } from "./motion.js";
+import { appStatus } from "./status.js";
+
+const CONFIG_TEXT = { b0: "B0: BM25 only", b1: "B1: + continuity", full: "Full: all four signals" };
 
 const METRICS = ["P@5", "P@10", "R@10", "MAP", "nDCG@10", "harmful@10", "judged@10"];
 const METRIC_HELP = {
@@ -13,8 +17,8 @@ const SIG_KEYS = [["w_rel", "rel"], ["w_cont", "cont"], ["w_health", "health"], 
 function tile(label, value, small, detail, ratio) {
   return h("div", { class: "tile" }, [
     h("span", { class: "k" }, label),
-    h("span", { class: "v" }, [h("span", { dataset: { n: String(value) } }, String(value)), small ? h("small", {}, small) : null]),
-    ratio == null ? null : h("div", { class: `meter${ratio >= 1 ? " is-done" : ""}` }, h("i", { dataset: { w: String(Math.max(0, Math.min(1, ratio))) } })),
+    h("span", { class: "v" }, [String(value), small ? h("small", {}, small) : null]),
+    ratio == null ? null : h("div", { class: `meter${ratio >= 1 ? " is-done" : ""}` }, h("i", { vars: { "--w": String(Math.max(0, Math.min(1, ratio))) } })),
     h("span", { class: "d" }, detail),
   ]);
 }
@@ -43,7 +47,7 @@ function runCard(run) {
       const v = row[m];
       if (typeof v !== "number") return h("td", {}, "n/a");
       const classes = [v === best[m] ? "best" : "", m === "harmful@10" && v > 0 ? "harm" : ""].filter(Boolean).join(" ");
-      return h("td", { class: classes }, h("div", { class: "cell" }, [f3(v), m === "harmful@10" ? null : h("div", { class: "meter" }, h("i", { dataset: { w: String(Math.max(0, Math.min(1, v))) } }))]));
+      return h("td", { class: classes }, h("div", { class: "cell" }, [f3(v), m === "harmful@10" ? null : h("div", { class: "meter" }, h("i", { vars: { "--w": String(Math.max(0, Math.min(1, v))) } }))]));
     }),
   ]));
   const types = Object.entries(run.ndcg_by_type || {});
@@ -56,6 +60,27 @@ function runCard(run) {
       h("thead", {}, h("tr", {}, [h("th", { scope: "col" }, "nDCG@10 by query type"), ...configs.map((c) => h("th", { scope: "col" }, c.toUpperCase()))])),
       h("tbody", {}, types.map(([type, vals]) => h("tr", {}, [h("td", {}, `Type ${type}`), ...configs.map((c) => h("td", {}, vals[c] == null ? "n/a" : f3(vals[c])))]))),
     ])) : null,
+  ]);
+}
+
+function weightsCard() {
+  const status = appStatus.value;
+  const configs = status && status.configs ? status.configs : {};
+  const names = Object.keys(configs);
+  if (!names.length) return h("div", { class: "callout callout-error" }, "The weights could not be read.");
+  return h("section", { class: "card" }, [
+    h("h3", {}, "Weights in each configuration"),
+    h("div", { class: "table-wrap" }, h("table", { class: "table weights-table" }, [
+      h("thead", {}, h("tr", {}, [h("th", {}, "Configuration"), ...SIGNALS.map((s) => h("th", {}, h("span", { class: `sig-name sig-${s.key}` }, [h("span", { class: "legend-dot" }), SIGNAL_LABEL[s.key]])))])),
+      h("tbody", {}, names.map((n) => h("tr", {}, [
+        h("td", {}, CONFIG_TEXT[n] || n),
+        ...SIGNALS.map((s) => {
+          const w = configs[n].weights[s.key] || 0;
+          return h("td", { class: `sig-${s.key}` }, w > 0 ? [h("span", { class: "bar" }, h("i", { vars: { "--w": pct(w) } })), f2(w)] : h("span", { class: "dim" }, "0"));
+        }),
+      ]))),
+    ])),
+    h("p", { class: "note" }, `Source: ${configs.full ? configs.full.source : configs[names[0]].source}. The top ${status.candidates} BM25 candidates are re-ranked; relevance and authority are min-max scaled over them, continuity and health are already in 0 to 1.`),
   ]);
 }
 
@@ -72,11 +97,12 @@ export async function renderEvaluation() {
     return;
   }
   clear(body);
+  body.appendChild(weightsCard());
   const d = data.data;
   const planTotal = (d.plan.dev || 0) + (d.plan.test || 0);
   const g = d.qrels.grades;
   body.appendChild(h("section", {}, [
-    h("h2", { class: "block-title" }, "Where the evaluation data stands"),
+    h("h2", { class: "block-title" }, "Evaluation data"),
     h("div", { class: "tiles" }, [
       tile("Judged queries written", d.queries.total, `/ ${planTotal}`, `dev ${d.queries.dev} of ${d.plan.dev}, test ${d.queries.test} of ${d.plan.test}`, planTotal ? d.queries.total / planTotal : null),
       tile("Grades recorded", d.qrels.rows, "", d.qrels.rows ? `over ${plural(d.qrels.queries, "query", "queries")}: grade 2 ${g["2"]}, grade 1 ${g["1"]}, grade 0 ${g["0"]}` : "none yet: grading needs the pooled sheets from the judging view"),
@@ -92,17 +118,17 @@ export async function renderEvaluation() {
       ...d.checks.info.map((t) => ["info", "Info", t]),
     ];
     body.appendChild(h("section", {}, [
-      h("h2", { class: "block-title" }, "Checks on the hand-made files"),
-      h("p", { class: "block-sub" }, ["The same checks as ", h("span", { class: "code" }, "python -m eval.check_data"), "."]),
-      h("div", { class: "findings" }, rows.map(([cls, label, text]) => h("div", { class: `finding ${cls}` }, [h("b", {}, label), h("span", {}, text)]))),
+      h("details", { class: "fold" }, [
+        h("summary", {}, `Checks on the hand-made files: ${plural(d.checks.errors.length, "error")}, ${plural(d.checks.warnings.length, "warning")}`),
+        h("p", { class: "block-sub" }, ["The same checks as ", h("span", { class: "code" }, "python -m eval.check_data"), "."]),
+        h("div", { class: "findings" }, rows.map(([cls, label, text]) => h("div", { class: `finding ${cls}` }, [h("b", {}, label), h("span", {}, text)]))),
+      ]),
     ]));
   }
   body.appendChild(h("section", {}, [
     h("h2", { class: "block-title" }, "Results"),
     data.runs.length ? h("div", { class: "runs" }, data.runs.map(runCard)) : emptyResults(),
   ]));
-  // the sections rise in one after another, the meters grow and the counts run up from zero
-  animateIn(Array.from(body.children), { y: 30, stagger: 0.1 });
-  growMeters(body);
-  $$("[data-n]", body).forEach((el) => countUp(el, Number(el.dataset.n), 0, 1));
+  body.appendChild(h("p", { class: "actions" }, h("a", { class: "btn", href: "#/judging" }, "Open the judging workbench")));
+  animateIn(Array.from(body.children), { stagger: 0.05 });
 }

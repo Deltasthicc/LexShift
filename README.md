@@ -140,6 +140,16 @@ such as `search,health`.
 | `make build-statutes` | `python -m m2_statute.extractor build` | M2 |
 | `make build-citations` | `python -m m3_treatment.citations build` | M3 |
 | `make build-health` | `python -m m3_treatment.scores build` | M3 |
+| `make m3` | `python -m m3_treatment.pipeline build`: the whole M3 pipeline from the committed label cache, no API key | M3 |
+| `make m3-extract` | `python -m m3_treatment.pipeline extract`: mentions, resolution, windows, `reports/resolution.md` | M3 |
+| `make m3-label-dry` | `python -m m3_treatment.pipeline label-llm --dry-run`: windows, requests and tokens, calls nothing | M3 |
+| `make m3-label` | `python -m m3_treatment.pipeline label-llm` (needs `GEMINI_API_KEY`; `LIMIT=N` caps new windows) | M3 |
+| `make m3-citations-baseline` | `python -m m3_treatment.pipeline citations --labels baseline` | M3 |
+| `make m3-gold-sample` | `python -m m3_treatment.gold sample --n 250 --double 60` | M3 |
+| `make m3-gold-merge` | `python -m m3_treatment.gold merge` (`ARGS=--allow-incomplete` merges the rows labelled so far) | M3 |
+| `make m3-evaluate` | `python -m m3_treatment.pipeline evaluate`: per-class precision, recall and F1 | M3 |
+| `make m3-test` | `python -m pytest tests/test_m3_*.py` (85 tests) | M3 |
+| the Treatment page | `python -m app.server`, then `#/treatment` | M3's pipeline stage by stage on the real data (read-only) |
 | `make demo QUERY='...'` | `python -m app.cli "..." [--offence-date YYYY-MM-DD]` | M4 |
 | `make eval` | `python -m eval.run_ablation --split test` | M4 |
 | `make tune` | `python -m eval.run_ablation --tune` | M4 |
@@ -153,7 +163,66 @@ such as `search,health`.
 | `make figures` | `python -m eval.figures` | M4 |
 | `make conformance` | `python -m eval.conformance` | all |
 
-The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
+The M3 commands run the real pipeline end to end; [M3 below](#m3-citations-and-judicial-treatment) explains each stage.
+
+## M3: citations and judicial treatment
+
+M3 answers one question for every judgment: **what did later benches do with it?** Followed, distinguished, doubted,
+overruled or neutral. The answer becomes two of the four ranking signals, `health()` and `authority()`, each backed by
+the sentence that supports it. Full detail: [m3_treatment/README.md](m3_treatment/README.md).
+
+**Status.** Built, tested (`make m3-test`, 85 tests) and run end to end on the 468-judgment corpus. `citations.jsonl`
+and `doc_health.jsonl` cover every judgment, `health()` and `authority()` serve the live ranking, and
+`LEXSHIFT_STUBS=none python eval/smoke.py` passes with every module real. The 269 citation windows that link two corpus
+judgments are labelled by Gemini (`gemini-3.5-flash-lite`, zero-shot), run offline once and cached in
+`data/llm_labels/m3_llm_labels.jsonl`: rebuilding needs no API key and the demo never calls a model. On a run that added
+Koushal, Navtej Singh Johar and Joseph Shine from the AWS bucket, `health(Koushal)` is 0.1, with the reasoning sentence
+of the five-judge Navtej bench as its evidence (D-033).
+
+**By the numbers** (the 468 judgments of 2024 and 2025):
+
+| Stage | Result |
+|---|---|
+| Mentions found | 22,861; the 7,372 references of a judgment to itself are dropped |
+| Citations kept | 15,489, in 421 judgments |
+| By kind | case name 9,297 · later short form 4,070 · reporter citation 4,001 · full citation 3,856 · supra 1,637 |
+| Resolved to a corpus judgment | 269 (1.7%): 201 by reporter citation, 68 by party name and year |
+| Why the rest stay unresolved | they cite High Court, foreign or older Supreme Court judgments: 98% of the unresolved citations that carry a year cite one before 2024 |
+| Appeal history, excluded | 133 |
+| Labels on the 269 resolved windows | neutral 161 · followed 106 · distinguished 2 |
+| Health | 1.0 for all 468: a two-year corpus holds no valid overruling of one of its own judgments |
+| Authority | PageRank separates them; 53 judgments carry treatment evidence |
+| Resolver check | 173 of 174 checkable reporter-citation links point to the judgment whose SCR citation the text gives |
+
+**How it works, stage by stage** (each stage is a tab on the Treatment page):
+
+1. **Find** (`text.py`, `citations.py`). The text is cleaned of margin letters and running page heads, then every
+   reference to an earlier case is found: SCR, SCC, SCC OnLine, AIR, SCALE, JT, Cri LJ and neutral (INSC) citations, and
+   "X v. Y" names. Five mention kinds: full, reporter citation, case name, `supra` ("Koushal (supra)") and later short
+   forms ("the decision in Koushal"). Short forms point back to their full mention, because courts mostly state
+   treatment in a short form: "Koushal stands overruled".
+2. **Resolve** (`resolver.py`). Each mention is linked to a judgment: reporter key first, then SCR page range with a
+   name check, then Jaccard similarity on party-name tokens plus the year. Unresolved mentions are kept and counted,
+   never dropped; the rates go to `reports/resolution.md`.
+3. **Window** (`windows.py`). The citing sentence plus one sentence either side, at most 1,500 characters, with the cited
+   case marked `[[ ]]`, is what gets classified, not the whole judgment. Appeal history (the judgment under appeal,
+   "impugned judgment", "set aside") is excluded: a reversal on appeal is not an overruling of a precedent.
+4. **Classify** (`classifier.py`). Gemini labels each resolved window offline, with every answer cached under a key that
+   includes the model; a tf-idf + logistic regression baseline is the comparison (`make m3-citations-baseline`). The
+   bench check makes a negative label valid only if the citing bench is at least as large as the cited one. The
+   gold-set tooling (`gold.py`) samples windows by cue word for two labellers, merges them with Cohen's kappa, and
+   `make m3-evaluate` reports per-class precision, recall and F1 against those human labels.
+5. **Score** (`graph.py`, `scores.py`). `health(d)` is the strongest valid negative: overruled 0.1, doubted 0.6,
+   otherwise 1.0. `authority(d)` is PageRank by our own power iteration (damping 0.85) over followed and neutral edges,
+   times a bench weight `log(1 + bench) / log(1 + 7)`, normalised to [0, 1]. With M2's offence ids a negative lowers
+   health only for queries on the offence the overruling discusses. At query time both are lookups in `doc_health.jsonl`.
+
+**IR concepts.** The citation graph and PageRank as a static, query-independent quality score g(d) added to relevance in
+the net score; proximity windows, so only sentences around a specific cited case are classified; Jaccard matching in the
+resolver; classifier evaluation by per-class precision, recall and F1, with Cohen's kappa for labeller agreement.
+
+**Design rules.** No raw keyword matching for treatment; "set aside" on appeal is not an overruling; newer is not
+stronger; a smaller bench cannot overrule a larger one; the LLM runs offline only and nothing in the live demo calls one.
 
 ## Demo
 
@@ -272,7 +341,7 @@ This table is the honest state of the project; each owner updates their row when
 | Shared contracts, config, stubs, smoke test | **Done**, with unit tests |
 | M1 corpus, index and `search()` | **Updated 2026-10-07:** `judgments.jsonl` is contract-valid (ISO dates, `bench_size` null instead of 0), the zone, parser and index problems are fixed, and the index is rebuilt with `python -m m1_index.index build` (2.6 MB). Still open: `ingest build` empties the corpus when `data/raw` is empty and nothing downloads the data, 3-judge benches are recorded wrongly, the working-directory-relative index path, lnc.ltc and query optimisation are not implemented. Earlier status, kept for the record: **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked; so `stubs.search` stays `true` until the open items above are closed. Needs older judgments in the sample |
 | M2 statute layer | **Updated 2026-10-07:** much better extraction (2,755 references, 6 of 9 statute forms, bare numbers resolved by date, 20 mapped offences) but **`data/statute_map.csv` is malformed, so the real `continuity()` raises and `main` fails the smoke gate**, and `BNS 103` on its own is not read. Earlier status, kept for the record: **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
-| M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), its review fixes (cache key, gold merge, same parties, data checks) are merged and were re-verified; run end to end on 203 real judgments (a stand-in labeller, since there are no Gemini labels or gold set yet) and checked against M4's `rank()` and demo: Koushal comes out overruled by the 5-judge Navtej bench. **Not done:** the real labelling run, the gold set, the F1 table, a built `doc_health.jsonl` for the corpus; so `stubs.health` and `stubs.authority` stay `true` |
+| M3 citations and treatment | **Updated 2026-10-07: built, tested and run on the 468-judgment corpus.** Citation extractor (five mention kinds, including supra and later short forms) and resolver, citation windows, appeal-history and self-citation filters, Gemini and tf-idf classifiers, bench check, PageRank, `health()` and `authority()`, gold-set and evaluation tooling. 15,489 citations in 421 judgments, 269 resolved to a corpus judgment and labelled by Gemini (`gemini-3.5-flash-lite`, zero-shot, cached in `data/llm_labels/`, on `m3-treatment`); `citations.jsonl` and `doc_health.jsonl` cover every judgment and `LEXSHIFT_STUBS=none python eval/smoke.py` passes. Run it with `make m3`; details in [m3_treatment/README.md](m3_treatment/README.md) |
 | M4 `rank()`, evaluation, demo | **On `main` since 2026-10-07.** `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker, the feasibility counter, the CLI demo and the web interface (search, compare, evidence, status, evaluation and a blind judging workbench) are implemented and unit-tested against fixtures and the stubs, and the interface was checked in a browser on the 200-judgment sample; the report skeleton and a prose draft, the pipeline diagram (`python -m eval.figures`), the video script and the submission checklist are written, and `python -m eval.submission_check` audits the checklist's machine-checkable items (branch `m4-rank`, merged into `main` on 2026-10-07). What remains for M4 is data that only people can make: the judged queries, the two judges' grades and the gold overruling list, then tuning on dev and the test table, the report PDF and the video |
 | Judged queries and qrels | **Not written yet: they are made by hand.** Candidate queries, query-specific grading criteria, the worksheet and the tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)). `python -m eval.feasibility` shows that the current 200-judgment sample (all 2025) cannot support the plan: of the 30 candidates 3 are answerable, 17 thin and 10 empty, so the corpus has to grow first |
 
