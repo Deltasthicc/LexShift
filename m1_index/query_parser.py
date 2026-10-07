@@ -1,6 +1,18 @@
+"""Boolean, proximity, and phrase query AST parser.
+
+Supports:
+  - Boolean: AND, OR, NOT
+  - Proximity: /s (same sentence), /p (same paragraph), /k (within k tokens)
+  - Phrases: "common intention"
+"""
+
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
-from m1_index.text_tokenizer import tokenize
+
+from m1_index.tokenizer import tokenize
+
 
 @dataclass
 class TermNode:
@@ -31,292 +43,129 @@ class NotNode:
     child: object
 
 
-def tokenize_query(query: str):
-    """
-    Break a query into:
-    - quoted phrases
-    - proximity operators
-    - Boolean operators
-    - ordinary terms
-    """
+RE_QUERY_TOKEN = re.compile(
+    r'"[^"]*"|/\w+|\(|\)|\bAND\b|\bOR\b|\bNOT\b|[^\s()]+',
+    re.IGNORECASE,
+)
 
-    pattern = r'"[^"]+"|/\w+|\(|\)|\bAND\b|\bOR\b|\bNOT\b|[^\s()]+'
 
-    return re.findall(pattern, query, flags=re.IGNORECASE)
+def tokenize_query(query: str) -> list[str]:
+    return RE_QUERY_TOKEN.findall(query)
 
 
 def normalize_term(term: str) -> str:
-    """
-    Normalize a single query term using the same
-    tokenizer used for the document corpus.
-    """
-
     tokens = tokenize(term)
-
     if not tokens:
-        return ""
-
-    if len(tokens) != 1:
-        raise ValueError(
-            f"Expected one query term, got: {tokens}"
-        )
-
+        # Fallback to lower stripped term to prevent dropping essential search tokens
+        clean = re.sub(r"[^\w-]", "", term.lower())
+        if not clean:
+            raise ValueError(f"Empty or invalid query term: {term!r}")
+        return clean
     return tokens[0]
 
 
-def parse_atom(tokens, position):
-    """
-    Parse a single term or quoted phrase.
-    """
+def parse_atom(tokens: list[str], position: int):
+    if position >= len(tokens):
+        raise ValueError("Unexpected end of query while expecting a term, phrase, or '('")
 
     token = tokens[position]
 
+    if token.upper() in {"AND", "OR"}:
+        raise ValueError(f"Unexpected Boolean operator {token!r} at position {position}")
+
+    if token.startswith("/") and len(token) > 1:
+        raise ValueError(f"Unexpected proximity operator {token!r} at position {position}")
+
     # Quoted phrase
     if token.startswith('"') and token.endswith('"'):
-        phrase_text = token[1:-1]
-
-        terms = tokenize(phrase_text)
-
-        if not terms:
+        phrase_text = token[1:-1].strip()
+        if not phrase_text:
             raise ValueError("Empty phrase")
-
+        terms = tokenize(phrase_text)
+        if not terms:
+            terms = [t.lower() for t in phrase_text.split() if t]
+        if not terms:
+            raise ValueError(f"Phrase contains no indexable terms: {token}")
         return PhraseNode(terms), position + 1
 
-    # Parenthesized expression
+    # Parenthesized group
     if token == "(":
         node, position = parse_or(tokens, position + 1)
-
         if position >= len(tokens) or tokens[position] != ")":
-            raise ValueError("Missing closing parenthesis")
-
+            raise ValueError("Missing closing parenthesis ')'")
         return node, position + 1
 
+    if token == ")":
+        raise ValueError("Unexpected closing parenthesis ')' without matching '('")
+
     # Ordinary term
-    return TermNode(normalize_term(token)), position + 1
+    norm = normalize_term(token)
+    return TermNode(norm), position + 1
 
-def parse_proximity(tokens, position):
-    """
-    Parse:
 
-        term /s term
-        term /p term
-        term /k term
-        "phrase" /s term
-
-    Proximity operators are left-associative.
-    """
-
+def parse_proximity(tokens: list[str], position: int):
     node, position = parse_atom(tokens, position)
 
     while position < len(tokens):
-
         token = tokens[position].lower()
-
-        if token not in {"/s", "/p"} and not re.fullmatch(
-            r"/\d+",
-            token
-        ):
+        if token not in {"/s", "/p"} and not re.fullmatch(r"/\d+", token):
             break
 
         operator = token
+        if position + 1 >= len(tokens):
+            raise ValueError(f"Proximity operator {operator!r} missing right-hand operand")
 
-        right, position = parse_atom(
-            tokens,
-            position + 1
-        )
-
-        node = ProximityNode(
-            left=node,
-            operator=operator,
-            right=right,
-        )
+        right, position = parse_atom(tokens, position + 1)
+        node = ProximityNode(left=node, operator=operator, right=right)
 
     return node, position
 
 
-def parse_not(tokens, position):
-    """
-    NOT has higher precedence than AND/OR.
-    """
-
-    if (
-        position < len(tokens)
-        and tokens[position].upper() == "NOT"
-    ):
-        child, position = parse_not(
-            tokens,
-            position + 1
-        )
-
+def parse_not(tokens: list[str], position: int):
+    if position < len(tokens) and tokens[position].upper() == "NOT":
+        if position + 1 >= len(tokens):
+            raise ValueError("NOT operator missing target expression")
+        child, position = parse_not(tokens, position + 1)
         return NotNode(child), position
 
     return parse_proximity(tokens, position)
 
 
-def parse_and(tokens, position):
-    """
-    Parse AND expressions.
-    """
+def parse_and(tokens: list[str], position: int):
+    node, position = parse_not(tokens, position)
 
-    node, position = parse_not(
-        tokens,
-        position
-    )
-
-    while (
-        position < len(tokens)
-        and tokens[position].upper() == "AND"
-    ):
-
-        right, position = parse_not(
-            tokens,
-            position + 1
-        )
-
-        node = BooleanNode(
-            operator="AND",
-            left=node,
-            right=right,
-        )
+    while position < len(tokens) and tokens[position].upper() == "AND":
+        if position + 1 >= len(tokens):
+            raise ValueError("AND operator missing right-hand operand")
+        right, position = parse_not(tokens, position + 1)
+        node = BooleanNode(operator="AND", left=node, right=right)
 
     return node, position
 
 
-def parse_or(tokens, position):
-    """
-    Parse OR expressions.
-    """
+def parse_or(tokens: list[str], position: int):
+    node, position = parse_and(tokens, position)
 
-    node, position = parse_and(
-        tokens,
-        position
-    )
-
-    while (
-        position < len(tokens)
-        and tokens[position].upper() == "OR"
-    ):
-
-        right, position = parse_and(
-            tokens,
-            position + 1
-        )
-
-        node = BooleanNode(
-            operator="OR",
-            left=node,
-            right=right,
-        )
+    while position < len(tokens) and tokens[position].upper() == "OR":
+        if position + 1 >= len(tokens):
+            raise ValueError("OR operator missing right-hand operand")
+        right, position = parse_and(tokens, position + 1)
+        node = BooleanNode(operator="OR", left=node, right=right)
 
     return node, position
 
 
 def parse_query(query: str):
-    """
-    Parse a complete query and return its AST.
-    """
+    """Parse complete query string and return AST root."""
+    if not query or not query.strip():
+        raise ValueError("Empty query")
 
-    tokens = tokenize_query(query)
-
+    tokens = tokenize_query(query.strip())
     if not tokens:
         raise ValueError("Empty query")
 
-    node, position = parse_or(
-        tokens,
-        0
-    )
-
+    node, position = parse_or(tokens, 0)
     if position != len(tokens):
-        raise ValueError(
-            f"Unexpected token: {tokens[position]}"
-        )
+        raise ValueError(f"Unexpected token {tokens[position]!r} at position {position}")
 
     return node
-
-
-def print_tree(node, indent=0):
-    """
-    Pretty-print the query AST for debugging/demo purposes.
-    """
-
-    prefix = "  " * indent
-
-    if isinstance(node, TermNode):
-
-        print(
-            f"{prefix}TERM: {node.term}"
-        )
-
-    elif isinstance(node, PhraseNode):
-
-        print(
-            f"{prefix}PHRASE: {' '.join(node.terms)}"
-        )
-
-    elif isinstance(node, ProximityNode):
-
-        print(
-            f"{prefix}PROXIMITY: {node.operator}"
-        )
-
-        print_tree(
-            node.left,
-            indent + 1
-        )
-
-        print_tree(
-            node.right,
-            indent + 1
-        )
-
-    elif isinstance(node, BooleanNode):
-
-        print(
-            f"{prefix}BOOLEAN: {node.operator}"
-        )
-
-        print_tree(
-            node.left,
-            indent + 1
-        )
-
-        print_tree(
-            node.right,
-            indent + 1
-        )
-
-    elif isinstance(node, NotNode):
-
-        print(
-            f"{prefix}NOT"
-        )
-
-        print_tree(
-            node.child,
-            indent + 1
-        )
-
-
-if __name__ == "__main__":
-
-    test_queries = [
-        "ipc AND murder",
-        "ipc AND NOT bns",
-        '"common intention"',
-        '"common intention" /s murder',
-        "ipc OR bns AND murder",
-    ]
-
-    for query in test_queries:
-
-        print()
-        print("=" * 60)
-        print("QUERY:", query)
-        print("=" * 60)
-
-        try:
-            tree = parse_query(query)
-            print_tree(tree)
-
-        except ValueError as error:
-            print("ERROR:", error)
