@@ -1,2 +1,23 @@
 old_act,old_section,new_act,new_section,relation,weight,source,note
 IPC,302,BNS,103,equivalent,1.0,"lawsikho.com/blog/ipc-to-bns-conversion; vakeel360.com/ipc-to-bns",Murder (BNS 103(1))
+offence_id,act1,section1,act2,section2,relation,weight
+OFF_MURDER,IPC,302,BNS,103,equivalent,1.0
+OFF_CULPABLE_HOMICIDE,IPC,304,BNS,105,equivalent,1.0
+OFF_ATTEMPTED_MURDER,IPC,307,BNS,109,equivalent,1.0
+OFF_CRIMINAL_CONSPIRACY,IPC,120B,BNS,61,equivalent,1.0
+OFF_SEDITION,IPC,124A,BNS,152,equivalent,1.0
+OFF_RAPE,IPC,376,BNS,63,equivalent,1.0
+OFF_THEFT,IPC,379,BNS,303,equivalent,1.0
+OFF_EXTORTION,IPC,384,BNS,308,equivalent,1.0
+OFF_ROBBERY,IPC,392,BNS,309,equivalent,1.0
+OFF_DACOITY,IPC,395,BNS,310,equivalent,1.0
+OFF_CHEATING,IPC,420,BNS,318,equivalent,1.0
+OFF_MISCHIEF,IPC,426,BNS,324,equivalent,1.0
+OFF_CRIMINAL_TRESPASS,IPC,447,BNS,329,equivalent,1.0
+OFF_ANTICIPATORY_BAIL,CRPC,438,BNSS,482,equivalent,1.0
+OFF_REGULAR_BAIL,CRPC,439,BNSS,483,equivalent,1.0
+OFF_DEFAULT_BAIL,CRPC,167,BNSS,187,equivalent,1.0
+OFF_FIR,CRPC,154,BNSS,173,equivalent,1.0
+OFF_POLICE_REPORT,CRPC,173,BNSS,193,equivalent,1.0
+OFF_COGNIZANCE,CRPC,190,BNSS,210,equivalent,1.0
+OFF_DISCHARGE,CRPC,227,BNSS,250,equivalent,1.0
