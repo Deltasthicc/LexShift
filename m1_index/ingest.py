@@ -17,6 +17,14 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 JUDGMENTS_FILE = PROCESSED_DIR / "judgments.jsonl"
 
+def clean_control_chars(text: str) -> str:
+    """Remove PDF control characters while preserving newlines and tabs."""
+    return "".join(
+        ch for ch in text
+        if ch in "\\n\\t" or ord(ch) >= 32
+    )
+
+
 RE_CRIMINAL = re.compile(
     r"\b(?:IPC|I\.P\.C\.|Indian\s+Penal\s+Code|BNS|Bharatiya\s+Nyaya\s+Sanhita|CrPC|Cr\.P\.C\.|Code\s+of\s+Criminal\s+Procedure|BNSS|Bharatiya\s+Nagarik\s+Suraksha\s+Sanhita)\b",
     re.IGNORECASE,
@@ -24,31 +32,78 @@ RE_CRIMINAL = re.compile(
 
 
 def parse_coram_bench_size(text: str) -> tuple[int | None, list[str]]:
-    """Parse coram lines like '[A, B and C, JJ.]' or 'A, B, JJ.'
+    """Parse Supreme Court coram/judge lines.
 
-    Marks * as author. Never returns 0; returns None if unknown.
+    Handles:
+      [A, B and C, JJ.]
+      [A, B and C,* JJ.]
+      [A, CJI and B,* JJ.]
+      [A and B, JJ]
+      A, J.
+      A, B, JJ.
     """
-    match = re.search(r"\[(.*?)(?:,\s*)?(?:JJ\.|J\.|C\.J\.I\.)\]", text)
-    if not match:
-        match = re.search(r"\bCoram\s*:\s*(.*?)(?=\n|$)", text, re.IGNORECASE)
 
-    if not match:
+    candidates = []
+
+    # Bracketed coram lines. Period after JJ is optional.
+    bracket_pattern = re.compile(
+        r"\[([^\]]+?)(?:,\s*\*?)?\s*JJ?\.?\s*\]",
+        re.IGNORECASE,
+    )
+
+    for match in bracket_pattern.finditer(text):
+        candidates.append(match.group(1))
+
+    # Unbracketed lines ending in J. or JJ.
+    for line in text.splitlines():
+        line = line.strip()
+
+        if re.search(r",\s*JJ?\.?\s*$", line, re.IGNORECASE):
+            candidate = re.sub(
+                r",\s*JJ?\.?\s*$",
+                "",
+                line,
+                flags=re.IGNORECASE,
+            )
+            candidates.append(candidate)
+
+    if not candidates:
         return None, []
 
-    raw_coram = match.group(1).strip()
-    raw_coram = raw_coram.replace("*", "")  # strip author marker
+    raw_coram = candidates[0]
 
-    # Split by comma or 'and'
-    names = re.split(r",\s*|\s+and\s+", raw_coram)
-    cleaned_judges = []
-    for name in names:
-        n = re.sub(r"\b(?:JJ\.|J\.|C\.J\.I\.|Hon'ble|Mr\.|Mrs\.|Justice)\b", "", name).strip()
-        if n:
-            cleaned_judges.append(n)
+    # Remove author markers.
+    raw_coram = raw_coram.replace("*", "")
 
-    size = len(cleaned_judges)
-    return (size if size > 0 else None), cleaned_judges
+    # Normalize whitespace, including PDF line wrapping.
+    raw_coram = re.sub(r"\s+", " ", raw_coram).strip()
 
+    # Split on comma or "and".
+    parts = re.split(r"\s+and\s+|,\s*", raw_coram, flags=re.IGNORECASE)
+
+    judges = []
+
+    for part in parts:
+        name = part.strip()
+
+        # Remove titles/roles that are not separate judges.
+        name = re.sub(
+            r"\b(?:Hon'?ble|Mr\.?|Mrs\.?|Ms\.?|Justice)\b",
+            "",
+            name,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        if name:
+            judges.append(name)
+
+    # Remove duplicates while preserving order.
+    unique_judges = list(dict.fromkeys(judges))
+
+    return (
+        len(unique_judges) if unique_judges else None,
+        unique_judges,
+    )
 
 def parse_iso_date(raw_date: Any, text: str = "") -> str:
     """Parse raw date or extract from text, returning strict YYYY-MM-DD."""
@@ -110,7 +165,7 @@ def build_judgments(sample_size: int | None = None) -> int:
                     except json.JSONDecodeError:
                         continue
 
-                    text = raw.get("text", "") or raw.get("judgment_text", "")
+                    text = clean_control_chars(raw.get("text", "") or raw.get("judgment_text", ""))
                     if not is_criminal(text):
                         continue
 
