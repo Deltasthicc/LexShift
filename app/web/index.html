@@ -51,8 +51,42 @@
   <main id="main">
     <!-- ================================================================ SEARCH: all four modules together -->
     <div id="view-search" data-view="search">
+      <section class="intro" id="intro" aria-labelledby="intro-title">
+        <div class="ambient" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
+        <div class="container intro-grid">
+          <div class="intro-copy">
+            <p class="intro-brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" class="m1"/><circle cx="16" cy="16" r="7.5" class="m2"/><circle cx="16" cy="16" r="3" class="m3"/></svg>LexShift</p>
+            <h1 class="intro-title" id="intro-title">
+              <span class="rise d1">Find the precedent</span>
+              <span class="inline-art art-bars" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></span>
+              <span class="rise d2">that is still safe</span>
+              <span class="inline-art art-ring" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" class="ra"/><circle cx="20" cy="20" r="8" class="rb"/><circle cx="20" cy="20" r="2.6" class="rc"/></svg></span>
+              <span class="rise d3">to cite.</span>
+            </h1>
+            <p class="intro-lede">Indian Supreme Court judgments, ranked by how well they match, whether the statute they applied still governs your offence date,
+              and how later benches treated them. Every status comes with the sentence that supports it.</p>
+            <div class="intro-actions">
+              <a class="btn btn-primary btn-lg" href="#top" id="intro-start">Start searching</a>
+              <span class="intro-signals" aria-label="The four signals"><span class="sig-rel">Relevance</span><span class="sig-cont">Continuity</span><span class="sig-health">Treatment</span><span class="sig-auth">Authority</span></span>
+            </div>
+          </div>
+          <div class="intro-art" aria-hidden="true">
+            <div class="art-plate plate-a"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><b class="bar b-rel"></b><b class="bar b-cont"></b><b class="bar b-health"></b></div>
+            <div class="art-plate plate-b"><span class="seal"></span><i class="l1"></i><i class="l2"></i><i class="l3"></i></div>
+            <div class="art-lens">
+              <svg class="ring r1" viewBox="0 0 200 200"><circle cx="100" cy="100" r="92" class="arc a-rel"/><circle cx="192" cy="100" r="4.5" class="node n-rel"/></svg>
+              <svg class="ring r2" viewBox="0 0 200 200"><circle cx="100" cy="100" r="74" class="arc a-cont"/><circle cx="100" cy="26" r="4.5" class="node n-cont"/></svg>
+              <svg class="ring r3" viewBox="0 0 200 200"><circle cx="100" cy="100" r="56" class="arc a-health"/><circle cx="44" cy="100" r="4.5" class="node n-health"/></svg>
+              <svg class="ring r4" viewBox="0 0 200 200"><circle cx="100" cy="100" r="38" class="arc a-auth"/><circle cx="100" cy="138" r="4.5" class="node n-auth"/></svg>
+              <span class="glyph">&#167;</span>
+            </div>
+          </div>
+        </div>
+        <a class="scroll-cue" href="#top" id="scroll-cue" aria-label="Scroll to the search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6"/></svg></a>
+      </section>
+
       <section class="hero container" id="top" aria-labelledby="hero-title">
-        <h1 class="hero-title" id="hero-title">Find the precedent that is still safe to cite.</h1>
+        <h2 class="hero-title" id="hero-title">Search the judgments</h2>
         <p class="lede">Supreme Court judgments ranked by four signals, each built by one module.</p>
 
         <form class="searchbar" id="search-form" role="search" autocomplete="off">

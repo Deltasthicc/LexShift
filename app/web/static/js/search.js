@@ -235,7 +235,7 @@ function setConfig(name) {
 
 // ------------------------------------------------------------------------------------------------------------- routing helpers
 export function focusQuery() {
-  scrollToTarget("#top", { offset: 0 });
+  scrollToTarget("#top", { offset: 60 }); // just below the sticky navigation
   window.setTimeout(() => els.q.focus({ preventScroll: true }), 300);
 }
 
