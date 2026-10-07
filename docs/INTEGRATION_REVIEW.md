@@ -33,6 +33,36 @@ here). `main` (`76ad44c`), `m2-statute` (`f0a629d`) and `m3-treatment` (`7777a6b
 | Whole suite | 519 passed, 2 expected failures (the known `parse_atom` and `extract_refs` cases) |
 | `eval.feasibility` on the 30 candidate queries | 3 answerable, 17 thin, 10 empty (the 200 judgments are all from 2025) |
 
+## Request tracker, 2026-10-07 (after the fourth pass)
+
+What each owner was asked to do in the earlier reviews, and where it stands in the code that is pushed. `main` now also holds M1's last pull request (`1c90283`);
+it still fails `python eval/smoke.py` (2 failures, M2's map and file) until M2 fixes them.
+
+| Owner | Asked for | State |
+|---|---|---|
+| **M1** | ISO dates in `judgments.jsonl` | **Done**; the tokenised copy is not regenerated (no longer read, still tracked) |
+| | `bench_size` never 0 | **Done** (null); **values for 3-judge benches still wrong** (0 of 10) |
+| | `parse_atom` raises `ValueError` | **Done** (malformed queries no longer raise) |
+| | zone splitter without hard-coded paragraph numbers | **Done in effect** (0 of 63 matches score 0; zone coverage 79% median) |
+| | a rebuild command, stop committing the index | **Half**: `python -m m1_index.index build` works (2.6 MB); `ingest build` empties the corpus when `data/raw` is empty and `download()` is a no-op; the old 74 MB files are still tracked |
+| | tests for M1 | **Open** (none in the repository) |
+| | a larger corpus with older judgments | **Open** (200 judgments, all 2025: 27 of the 30 queries have little to find) |
+| | lnc.ltc, query optimisation, library BM25 comparison | **Open** (not in the code) |
+| | flip `stubs.search` | **Open**, and now possible: the search contract passes smoke |
+| **M2** | paragraph numbers are not sections | **Done** (a `Section`/`u/s` word is required) |
+| | the statute forms of the Build Guide | **6 of 9**; `IPC 302`, `BNS 103` on their own and `BNS 3(5)` are not read, `Cr.P.C.` comes out as IPC |
+| | bare numbers by offence date, `offence_id` | **Done** for dates; `offence_id` on 123 of 2,755 references |
+| | 20 to 40 mapped sections, official sources | 20 rows, **but `statute_map.csv` is malformed** (second header on line 3) and has no sources |
+| | drop the `STUB-` special case, use `common.config.load_config` | **Open** |
+| | `extract_refs` not quadratic | **Done** |
+| | commit `doc_statutes.jsonl`, then flip the switch | **Open**: the switch was flipped on `main` without the file |
+| **M3** | M3's review fixes (cache key, gold merge, same parties, data checks) | **Done** (D-024) |
+| | evidence is the reasoning sentence, keep the `[[ ]]` marker | **Open** (no push since 2026-10-06) |
+| | running headers are not appeal history | **Open** |
+| | name extraction keeps neighbouring words | **Open** |
+| | the gold set (two labellers), the Gemini run, the F1 table, `doc_health.jsonl` | **Open** (`data/treatment_gold.csv` has only its header) |
+| | flip `stubs.health` and `stubs.authority` | **Open** (waits for the files above) |
+
 ## Second update, 2026-10-07 (later): M1's and M2's final pushes
 
 Fetched `origin` again. `m1-index` moved by two commits (`0283d5a` "Update M1 indexing and corpus pipeline", `bfc6e7c` "Fix unknown bench sizes in judgment corpus"),
@@ -229,5 +259,5 @@ not how strong the match is (DECISIONS.md D-006); the judged queries, grades and
 1. M1: ISO dates in the tokenised copy, correct benches (the last blocker for `stubs.search`), a rebuild command, older judgments in the sample, then flip `stubs.search` once `smoke` passes.
 2. M2: the extractor fixes, then commit the sample's `doc_statutes.jsonl` and flip `stubs.statute`.
 3. M3: evidence choice and the running-header regression, the gold set and the Gemini run, then build `doc_health.jsonl` and flip `stubs.health` and `stubs.authority`.
-4. M4: with real modules on, write the queries, pool, grade, tune on dev, report on test.
+4. M4: **done** (2026-10-07): `rank()`, the evaluation tools, the interface, the 30 queries (adopted by the owner), and `m4-rank` on `main`. **Left, in this order, all needing people or the other modules:** (a) M1's corpus grows (older judgments, the cases named in `eval/examples/query_grade_criteria.example.md`); (b) all four modules real (`python -m eval.submission_check` shows the switches); (c) `python -m eval.pool --round round1`, two judges in the Judging screen, `python -m eval.make_qrels --round round1`, the hand-verified `eval/gold_overrulings.csv`; (d) `python -m eval.run_ablation --tune`, then `--split test`; (e) the report and the video. Nothing in (c) and (d) can be generated: grades and the gold list are written by people.
 5. Everyone: `python -m eval.conformance` and `python eval/smoke.py` must be clean before merging to `main`.

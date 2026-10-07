@@ -416,6 +416,20 @@ frame rate on the owner's machine (the pane throttles animation frames, so timin
 * **`docs/DEMO_M4.md`**: M4's 90-second demo from the existing screens (no separate M4 page is needed: the Search page already shows fusion, the ladder and the breakdown; Evaluation and
   Judging show how it will be measured), with what to say, the queries that work on the current corpus, and what to do when a module is not ready.
 
+### D-032 (2026-10-07) `m4-rank` on `main`; navigation fixes; the request tracker
+* **`m4-rank` pushed to `main` at the owner's request** (a fast-forward: `main` had been merged into `m4-rank` first, including M1's pull request #3). The merge gate of CLAUDE.md is **not
+  met on one count**: `python -m pytest` has 8 failures, all in M2's statute layer (M2's own 7 hour-0 tests and the continuity robustness test, which fails because M2's pushed map is malformed);
+  `python eval/smoke.py` passes with the configuration as committed. `stubs.statute` stays `true` on `main`: M2's `false` made `main` fail its own smoke gate (the file it reads is not in git and
+  the map is invalid), and the owner has not fixed either yet. Every stub is still flagged on every screen.
+* **Navigation.** Search pressed from further down the page changed the highlight but did not scroll, and a link to the hash already in the address bar did nothing (no `hashchange`). The router now
+  scrolls to the top for Search and to the section for Method, and the nav links handle a click on the current hash themselves; the status button lost its name when its text was hidden and the
+  five links plus the status text overflowed below 900 px (the text is hidden from 900 px down and the button has its own label). Every other button on the Search, Method, Evaluation,
+  Judging and Index screens was clicked in a browser: the ranking ladder, ranked and compare modes, result count, the treatment filter, expand all, the shortcuts and status panels, the
+  reader with previous and next, copy id (the browser pane refuses clipboard access; the page says so), the keyboard shortcuts, the theme button, the hero and call-to-action buttons, the
+  method accordion, and the Index page's stages, jumps, carousel, forms, check and latency buttons. The browser pane throttles animation frames, so scroll positions were measured by stepping
+  GSAP's ticker; frame rate on a real machine was not measured.
+* **The request tracker** (docs/INTEGRATION_REVIEW.md) lists, per module, what was asked and what the pushed code does today.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

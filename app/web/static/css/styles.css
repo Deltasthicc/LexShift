@@ -911,3 +911,7 @@ html[data-motion="off"] .inline-art i, html[data-motion="off"] .ring, html[data-
   .nav-tools { gap: 0.1rem; }
 }
 .ix-cta-row .btn-secondary { background: color-mix(in srgb, var(--bg) 72%, transparent); }
+@media (max-width: 900px) {
+  .status-btn #status-label { display: none; }
+  .status-btn { padding: 0.5rem; }
+}

@@ -54,6 +54,7 @@ async function doRoute() {
   else if (view === "index") { if (changed) await renderIndexPage(); }
   else {
     if (path === "/method") scrollToTarget("#method", { offset: 70 });
+    else if (!changed && searchBooted && !params.get("q")) scrollToTarget("#top", { offset: 0, duration: 0.9 }); // Search, pressed from further down the page
     if (!searchBooted) { searchBooted = true; applyParams(params); }
     else if (paramsDiffer(params)) applyParams(params, { scroll: true });
   }
@@ -74,6 +75,21 @@ async function route() {
   }
 }
 
+// A link to the hash we are already on fires no hashchange, so it would do nothing at all: scroll to where it points instead
+// (Method to the method section, anything else to the top of the page).
+function wireNavLinks() {
+  $$("a.brand, .nav-links a[data-route]").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      const href = a.getAttribute("href");
+      if (href !== (window.location.hash || "#/")) return; // a different hash: the router handles it
+      e.preventDefault();
+      if (current === "search" && href === "#/method") scrollToTarget("#method", { offset: 70 });
+      else if (current === "search") scrollToTarget("#top", { offset: 0, duration: 0.9 });
+      else scrollToTarget($(`[data-view="${current}"]`), { offset: 0, duration: 0.8 });
+    });
+  });
+}
+
 async function boot() {
   initTheme();
   initTooltips();
@@ -86,6 +102,7 @@ async function boot() {
     window.setTimeout(focusQuery, current !== "search" ? 700 : 0);
   });
   $("#scroll-cue").addEventListener("click", () => scrollToTarget("#method", { offset: 70 }));
+  wireNavLinks();
   window.addEventListener("hashchange", route);
   const status = await initStatus();
   await route();

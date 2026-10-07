@@ -538,3 +538,22 @@ def test_the_index_script_inserts_text_only_and_the_page_has_no_inline_style_or_
     assert "innerHTML" not in js and "insertAdjacentHTML" not in js and not re.search(r"(?<![A-Za-z])eval\(", js)
     html = (WEB / "index.html").read_text(encoding="utf-8")
     assert not re.search(r"\sstyle=|\son[a-z]+=", html), "the Content-Security-Policy allows no inline style or handler"
+
+
+# ----------------------------------------------------------------------------------------------- navigation buttons
+def test_the_nav_links_work_when_the_hash_does_not_change():
+    """Search pressed from further down the page, and a link to the hash we are already on (no hashchange fires), used to do nothing."""
+    main = (WEB / "static" / "js" / "main.js").read_text(encoding="utf-8")
+    assert "function wireNavLinks" in main and "wireNavLinks();" in main
+    assert 'href !== (window.location.hash || "#/")' in main, "a click on the current hash must be handled by the click itself"
+    assert 'scrollToTarget("#top"' in main, "Search scrolls to the top of the page when the view is already the search view"
+    assert 'scrollToTarget("#method"' in main
+
+
+def test_every_nav_link_has_a_route_and_the_status_button_a_name_at_every_width():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+    routes = re.findall(r'<a href="#/([a-z]*)" data-route="([a-z]+)"', html)
+    assert [r for _, r in routes] == ["search", "method", "evaluation", "judging", "index"]
+    assert 'id="status-btn"' in html and 'aria-label="Show which modules are real' in html, "its text is hidden on narrow screens, so it needs its own name"
+    assert re.search(r"@media \(max-width: 900px\) \{\s*\.status-btn #status-label \{ display: none; \}", css), "five links plus the status text overflow below 900px"
