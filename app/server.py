@@ -141,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(s.examples())
         elif path == "/api/corpus":
             self._json(s.corpus(_one(q, "n", "40")))
+        elif path == "/api/modules":
+            self._json(s.modules())
         elif path == "/api/evaluation":
             self._json(s.evaluation())
         elif path == "/api/judge/rounds":
