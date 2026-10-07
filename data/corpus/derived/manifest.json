@@ -1,0 +1,25 @@
+{
+  "corpus_sha256": "af2e6856dfe8c953b28ccd4c9f32ad78196fbe8a9af125f21c383d477648d8aa",
+  "files": {
+    "doc_statutes": {
+      "file": "doc_statutes.jsonl.xz",
+      "rows": 4819,
+      "sha256": "49918a0de6f0bf07c742c5cbbee5495bd2d7f35221e421c65f4768f9a86ee712"
+    },
+    "doc_health": {
+      "file": "doc_health.jsonl.xz",
+      "rows": 4819,
+      "sha256": "a3f881ed9a37a8c63ffd1e858ea21f99d209ab38df142c9e9ca349a11fc22345"
+    },
+    "doc_meta": {
+      "file": "doc_meta.jsonl.xz",
+      "rows": 4819,
+      "sha256": "9b9b81265ea9ad887eaeccaef8bd9f12d62d794e07bb0ef8bddbd0abb46826c1"
+    },
+    "citations": {
+      "file": "citations.jsonl.xz",
+      "rows": 160705,
+      "sha256": "55ebc4f17295a773ebc19903e90cecd5acd6a89f8410832249f90f6bee71836f"
+    }
+  }
+}

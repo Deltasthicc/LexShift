@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check watch figures ui docmeta data download corpus unpack build-index build-statutes build-citations build-health \n	m3 m3-extract m3-label-dry m3-label m3-citations-baseline m3-gold-sample m3-gold-merge m3-evaluate m3-test
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check watch figures ui docmeta data ready download corpus unpack build-index build-statutes build-citations build-health \n	m3 m3-extract m3-label-dry m3-label m3-citations-baseline m3-gold-sample m3-gold-merge m3-evaluate m3-test
 
 help:
 	@echo "setup            install requirements.txt"
@@ -21,6 +21,7 @@ help:
 	@echo "figures          draw the pipeline diagram for the report (docs/figures)"
 	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
+	@echo "ready            everything restored and checked, every module real (python -m app.setup); then run_demo.ps1 or python -m app.server --real --open"
 	@echo "data             everything the demo reads, from a fresh clone and no network: unpack, docmeta, build-index, build-statutes (about 3 minutes)"
 	@echo "unpack           M1: data/corpus/judgments.jsonl.xz -> data/processed/judgments.jsonl (a fresh clone runs this first, no network)"
 	@echo "download         M1: rebuild the corpus from the public AWS bucket (catalog, PDFs, text, judgments.jsonl; about 1.5 GB for 2025-2015)"
@@ -79,6 +80,9 @@ ui:
 
 docmeta:
 	$(PY) -m app.docmeta
+
+ready:
+	$(PY) -m app.setup
 
 data: unpack docmeta build-index build-statutes
 

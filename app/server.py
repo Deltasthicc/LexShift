@@ -238,7 +238,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=8765, help="port (default 8765; 0 picks a free one)")
     ap.add_argument("--open", action="store_true", help="open the interface in the default browser")
     ap.add_argument("--verbose", action="store_true", help="log every request")
+    ap.add_argument("--real", action="store_true", help="ignore a LEXSHIFT_STUBS override left in your shell, so the page follows common/config.yaml (all four modules real)")
     args = ap.parse_args(argv)
+    if args.real:
+        import os
+
+        os.environ.pop("LEXSHIFT_STUBS", None)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
@@ -260,6 +265,11 @@ def main(argv: list[str] | None = None) -> int:
     if status["stub_mode"]:
         print(f"*** STUB MODE: {', '.join(status['stubbed'])} come from fixed-value stand-ins; the page labels every result "
               "accordingly and nothing it shows is a result. ***")
+        if status.get("env_override"):
+            print(f"    Why: LEXSHIFT_STUBS={status['env_override']} is set in this shell. Start with `python -m app.server --real` "
+                  "(or clear it: PowerShell `Remove-Item Env:LEXSHIFT_STUBS`).")
+        else:
+            print("    Why: a `stubs:` switch is still true in common/config.yaml. `git pull` the latest main, then `python -m app.setup`.")
     print("Press Ctrl+C to stop.")
     if args.open:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()

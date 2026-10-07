@@ -31,6 +31,7 @@ import math
 import os
 import pickle
 import sys
+import zlib
 from array import array
 from bisect import bisect_left
 from collections.abc import Iterator, Mapping
@@ -373,6 +374,17 @@ class InvertedIndex:
 
     @classmethod
     def load(cls, directory: Path | str = INDEX_DIR) -> "InvertedIndex":
+        """Read the index file; any way it can be unreadable (cut short, damaged, an older format) becomes one message that says how to rebuild it."""
+        try:
+            return cls._load(directory)
+        except (FileNotFoundError, RuntimeError):
+            raise
+        except (zlib.error, gzip.BadGzipFile, EOFError, pickle.UnpicklingError, ValueError, OSError) as exc:
+            raise RuntimeError(f"{Path(directory) / INDEX_FILE} is damaged ({type(exc).__name__}: {exc}). "
+                               "Rebuild it with 'python -m m1_index.index build' (about 2 minutes) or run 'python -m app.setup'.") from exc
+
+    @classmethod
+    def _load(cls, directory: Path | str) -> "InvertedIndex":
         in_file = Path(directory) / INDEX_FILE
         if not in_file.exists():
             raise FileNotFoundError(f"Index file {in_file} not found. Run 'python -m m1_index.index build' first.")

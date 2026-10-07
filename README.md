@@ -111,11 +111,7 @@ Linux), then:
 ```bash
 pip install -r requirements.txt
 python -m nltk.downloader stopwords   # once; M1's tokenizer reads this list
-python -m m1_index.ingest unpack      # once; the 4,819-judgment corpus from data/corpus/judgments.jsonl.xz (41 MB, tracked) into data/processed/, no network
-python -m app.docmeta                 # once; case titles for the web page
-python -m m1_index.index build        # once; M1's search index (about 140 seconds, 53 MB, git-ignored)
-python -m m2_statute.extractor        # once; M2's statute references per judgment (about 20 seconds)
-                                      # (the four lines above are `make data`)
+python -m app.setup                   # once, and after every pull: the 4,819-judgment corpus, the statute, treatment and authority data and the search index, all restored from files in git, no network, no API key (about 3 minutes, most of it the index)
 python -m pytest            # unit tests
 python eval/smoke.py        # contract + end-to-end check; the merge gate for main
 ```

@@ -9,13 +9,15 @@ All four modules are **real** now: `python -m eval.submission_check` says `[PASS
 
 ```powershell
 cd C:\Users\shash\Downloads\IRHackathon
-.\.venv\Scripts\Activate.ps1
-python -m eval.submission_check          # first line of the report must be: [PASS] every provider is real
-python -m app.server --port 8765 --open  # leave it running; the page is http://127.0.0.1:8765
+git pull origin main        # the latest main has everything below; your partners do the same
+.\run_demo.ps1              # restores the data, clears any stale stub override, stops an old server on port 8765, starts the real one
 ```
 
-If port 8765 is busy (an old server is still running), close it first: `Get-NetTCPConnection -LocalPort 8765 | % { Stop-Process -Id $_.OwningProcess -Force }`. The top bar must show the green pill **All modules real** and no stub banner (reload the browser tab after any server restart: an old tab keeps the old status). The page opens on an intro screen: press **Start searching**.
-Everything the pages read is already built in this folder (`data/processed/`: corpus, index, statutes, treatment). On a fresh clone: `make data`, then `make m3`.
+`run_demo.ps1` is `python -m app.setup` (restores the 4,819-judgment corpus, the statute, treatment and authority data and the search index from files in git, no key and no network, about 3 minutes the first time) followed by `python -m app.server --real --open`.
+The top bar must show the green pill **All modules real** and no stub banner; reload the browser tab after any server restart, an old tab keeps the old status. The page opens on an intro screen: press **Start searching**.
+Then `python -m eval.submission_check` must say `[PASS] every provider is real`.
+
+**Why you saw stub mode:** an old server was still running, started from another terminal with `LEXSHIFT_STUBS=health,authority` still set in that shell (a leftover from a test run); the page then says "Overridden for this run by LEXSHIFT_STUBS". `run_demo.ps1` and `--real` remove that override and close the old server.
 
 ## Grade the evaluation round first (about 25 minutes, this is what gives you results to show)
 
