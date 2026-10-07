@@ -37,3 +37,6 @@ eval/judging/stub_*
 
 # Notebooks scratch
 .ipynb_checkpoints/
+
+# The progress watcher keeps its worktree, state and reports here (never committed)
+.watch/

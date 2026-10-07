@@ -118,6 +118,51 @@ def _private_tokens(title: str) -> set[str]:
     return party_tokens(" ".join(sides), _GOVERNMENT)
 
 
+def is_own_title(citing_title: str, name: str, common: frozenset[str] | set[str] = frozenset()) -> bool:
+    """True when a name-only mention is the judgment's own title (a running header), however the PDF printed it.
+
+    Running headers come truncated ("Sudershan Singh Wazir v. State"), abbreviated ("NAVTEJ SINGH JOHAR v. UOI THR.
+    SECY"), or glued to the words that follow them ("Mahabir & Ors. v. State of Haryana Code of Criminal Procedure"), so
+    a Jaccard over all tokens misses them. The test is containment: every distinctive token of the title's private side
+    (not a government word, not a common name, not frequent in the corpus) occurs in the mention. A title with no such
+    token ("Ram Singh v. State of Haryana") needs every one of its party tokens in the mention instead. Either way the
+    mention's other side must open with a word of the title ("Sanjay v. Union of India" is not "Sanjay v. State of
+    U.P."), or with its initials ("UOI").
+    """
+    if not citing_title or not name:
+        return False
+    mention = party_tokens(name)
+    title = party_tokens(citing_title)
+    distinctive = _private_tokens(citing_title) - COMMON_NAME_WORDS - set(common)
+    if not (distinctive <= mention if distinctive else bool(title) and title <= mention):
+        return False
+    first = next(iter(_ordered_tokens(split_parties(name)[1])), None)
+    if first is None or first in title:
+        return True
+    initials = "".join(w[0] for side in split_parties(citing_title) for w in re.findall(r"[a-z0-9]+", side.lower()))
+    return len(first) > 1 and first in initials
+
+
+def _ordered_tokens(side: str) -> list[str]:
+    return [t for t in re.findall(r"[a-z0-9]+", side.lower()) if party_tokens(t)]
+
+
+APPEAL_REACH = 250  # characters either side of the mention in which a "set aside" or "impugned" cue must fall
+
+
+def appeal_context(text: str, start: int, end: int, spans: list[tuple[int, int]], reach: int = APPEAL_REACH) -> str:
+    """The mention's own sentence(s), cut to `reach` characters either side of it.
+
+    The appeal-history cues for a non-Supreme-Court decision must be about that decision: a "set aside" in the next
+    sentence (usually this Court's own order on the appeal) says nothing about a High Court case cited for its holding.
+    """
+    if not spans:
+        return text[max(0, start - reach) : end + reach]
+    first, last = sentence_index(spans, start), sentence_index(spans, max(start, end - 1))
+    lo, hi = max(spans[first][0], start - reach), min(spans[last][1], end + reach)
+    return text[lo:hi]
+
+
 def is_appeal_history(
     window: str,
     citing_title: str,
@@ -127,6 +172,8 @@ def is_appeal_history(
 ) -> bool:
     """True when the cited decision is this case's own history (the judgment under appeal, review or remand).
 
+    `window` is the text searched for the cues; the pipeline passes `appeal_context()` (the mention's own sentence
+    near the mention), not the whole citation window.
     * Same parties as the citing judgment, sharing a distinctive name: the earlier round of the same dispute (High
       Court order, review petition).
     * A non-Supreme-Court decision cited as the impugned judgment, or described as set aside / reversed / quashed: a

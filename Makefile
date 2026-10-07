@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check figures ui docmeta download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check watch figures ui docmeta download build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -17,6 +17,7 @@ help:
 	@echo "conformance      check M1, M2 and M3 artefacts and functions against the shared contracts"
 	@echo "feasibility      count what the corpus holds for each judged query (never a grade)"
 	@echo "final-check      audit the submission checklist (ARGS=--run adds pytest, both smoke tests and the demo)"
+	@echo "watch            fetch every branch, integrate and audit them in a worktree, report progress (ARGS=--every 600 to repeat)"
 	@echo "figures          draw the pipeline diagram for the report (docs/figures)"
 	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
@@ -89,3 +90,6 @@ final-check:
 
 figures:
 	$(PY) -m eval.figures
+
+watch:
+	$(PY) -m eval.progress_watch $(ARGS)

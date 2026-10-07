@@ -19,6 +19,8 @@ jobs:
         run: python -m nltk.downloader stopwords
       - name: M1 search index (built from the committed judgments.jsonl)
         run: python -m m1_index.index build
+      - name: M2 per-judgment statute file (built from the committed judgments.jsonl)
+        run: python -m m2_statute.extractor build
       - name: Unit tests
         run: python -m pytest
       - name: Smoke test (contracts and end-to-end; stubs unless a module has flipped its switch)

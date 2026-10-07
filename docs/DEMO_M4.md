@@ -16,9 +16,7 @@ The page always shows a **stub banner** when any signal is a stand-in. Do not hi
 "health and authority are placeholders until M3's run is merged". If every provider is real, the banner is gone and you can say
 what the treatment signal shows.
 
-Queries that work on the current corpus (200 judgments, all 2025): `punishment for murder under section 103 BNS` with offence date
-`2025-01-10`, and `section 103` with the two dates `2020-06-01` and `2025-02-01`. Avoid typing `BNS 103` or `IPC 302` on their own:
-M2's pushed parser does not read an act followed by a bare number (docs/INTEGRATION_REVIEW.md, M2 finding 9).
+Queries that work on the current corpus (468 judgments from 2024 and 2025, real search and real statute): `punishment for murder under section 103 BNS` with offence date `2025-01-10`, and the pair `BNS 103` dated `2025-01-10` and `IPC 302` dated `2020-06-01` (the same offence under the two codes). **Avoid a bare section number such as `section 103`**: M2's parser resolves the code from the date but leaves the section's act `UNKNOWN`, so the date toggle shows no continuity (docs/INTEGRATION_REVIEW.md, M2-12). Re-check this paragraph after M2's next push.
 
 ## The script
 
@@ -27,7 +25,7 @@ M2's pushed parser does not read an act followed by a bare number (docs/INTEGRAT
 | 0:00 to 0:10 | Search page, query box | "M4 combines four signals into one ranking and measures whether that beats plain BM25. The formula is on the Method page: relevance, continuity, treatment and authority, each between 0 and 1." |
 | 0:10 to 0:35 | Run `punishment for murder under section 103 BNS`, date 2025-01-10. Point at one result's four bars, then open **Score breakdown** | "Every result shows its four contributions and why. Here continuity says BNS 103 maps to IPC 302 as an equivalent provision, so an IPC-era judgment is not penalised for its age. Nothing here is hard-coded: it is the real search, the real statute parser and the fusion function." |
 | 0:35 to 0:55 | Click the ranking ladder: **Relevance**, then **+ Continuity**, then **+ Treatment, authority** | "This is the ablation we evaluate: B0, B1 and full. Watch the list re-order as each signal is added; that movement is exactly what the evaluation measures." |
-| 0:55 to 1:10 | Run `section 103` with 2020-06-01, then with 2025-02-01 (or press `m` for Compare) | "The same words, two offence dates, two different codes: the date decides between IPC 103 and BNS 103, and the ranking changes with it." |
+| 0:55 to 1:10 | Run `IPC 302` with offence date 2020-06-01, then `BNS 103` with 2025-01-10 (or press `m` for Compare) | "The same offence under two codes. The offence date selects the code, and continuity ties them together through the typed mapping, so an IPC-era judgment is found from a BNS query." |
 | 1:10 to 1:30 | **Evaluation** page, then **Judging** | "We compare B0, B1 and full on 30 hand-written queries, 10 to tune on and 20 to report, with P@5, Recall@10, MAP, nDCG@10 and harmful@10. Grades come from two judges on blind sheets (this screen: no scores, no system names), with agreement reported as kappa. Weights are tuned on the 10 dev queries only. The result table appears here once grading is done; until then this page says so rather than showing a number." |
 
 ## If something is not ready on the day

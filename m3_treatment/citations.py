@@ -147,6 +147,22 @@ LEAD_WORDS = frozenset(
     reliance court judgment decision case bench supreme apex hon'ble learned para paras per however but although
     while when if accordingly therefore moreover after before since on at by and of re: re""".split()
 )
+# Words after which a name starts afresh on the left: "A Constitution Bench in Bachan Singh v. ...", "Case Law Cited
+# Aparna A Shah v. ...". "in" and "since" count only in lower case ("In re" names exist).
+LEFT_CUT_LOWER = frozenset({"in", "since"})
+LEFT_CUT_ANY = frozenset({"cited"})
+# Words that end the respondent side when they follow it: headings and running text glued onto a name
+# ("... v. State of Haryana Code of Criminal Procedure", "... v. Union of India Writ Petition", "... Although").
+RIGHT_STOP = frozenset(
+    """code case list although writ petition appeal appeals gazette section sections article articles para paras held
+    headnote fir jurisdiction criminal civil however hence thus therefore whereas while wherein also see vide supra
+    learned""".split()
+)
+RIGHT_STOP_LOWER = frozenset({"in", "since"})
+# Lower-case "the" inside a name follows one of these ("Union of the ...", "represented by the ..."); anywhere else it
+# starts running text ("... v. State of Haryana the High Court held").
+_THE_AFTER = frozenset({"of", "by", "through", "thr", "thr.", "to"})
+_SIDE_END = frozenset({"ors", "anr", "others", "another"})
 MAX_LEFT, MAX_RIGHT = 9, 12
 
 
@@ -179,6 +195,15 @@ def _left_name(text: str, sep_start: int) -> int | None:
         start = m.start()
     if start is None:
         return None
+    # restart after the last word that introduces the name ("... Bench in Bachan Singh" -> "Bachan Singh")
+    for m in _TOKEN.finditer(text, start, sep_start):
+        word = _clean_tok(m.group())
+        if word in LEFT_CUT_LOWER or word.lower().rstrip(":") in LEFT_CUT_ANY:
+            start = m.end()
+    nxt = _TOKEN.search(text, start, sep_start)
+    if not nxt:
+        return None
+    start = nxt.start()
     # strip sentence-initial words and connectors from the left edge
     while True:
         m = _TOKEN.match(text, start)
@@ -197,6 +222,7 @@ def _left_name(text: str, sep_start: int) -> int | None:
 def _right_name(text: str, sep_end: int) -> int | None:
     """End offset of the respondent side starting at `sep_end`, or None."""
     end = None
+    prev = ""
     for i, m in enumerate(_TOKEN.finditer(text, sep_end, min(len(text), sep_end + 250))):
         if i >= MAX_RIGHT:
             break
@@ -204,6 +230,15 @@ def _right_name(text: str, sep_end: int) -> int | None:
         tok = _clean_tok(raw)
         if tok[:1] in "([" or tok[:1].isdigit() or not _is_name_word(tok):
             break
+        word = tok.rstrip(",;:.")
+        if i > 0 and (
+            word.lower() in RIGHT_STOP
+            or word in RIGHT_STOP_LOWER
+            or (word == "the" and prev.lower() not in _THE_AFTER)
+            or prev.lower() in _SIDE_END  # "& Ors." closes the side: "... Board & Ors. of the High Court"
+        ):
+            break
+        prev = word
         end = m.start() + len(tok.rstrip(",;:")) if tok != raw or tok.endswith((",", ";", ":")) else m.end()
         if tok.endswith((",", ";", ":")) or tok != raw:
             break

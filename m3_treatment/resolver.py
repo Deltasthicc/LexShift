@@ -90,16 +90,21 @@ def bench_from_text(text: str) -> int | None:
 
 
 def bench_of(rec: dict) -> int | None:
-    """bench_size from M1, else the number of judges listed, else the coram line in the text, else None.
+    """The coram line in the text, else bench_size from M1, else the number of judges listed, else None.
 
-    Never guessed: the coram line is the reporter's own list of the judges on the bench.
+    Never guessed: the coram line is the reporter's own list of the judges on the bench, so it comes first. On M1's 200
+    judgments of 2025 it is readable for all 200 and agrees with bench_size wherever both are known, except 7 three-judge
+    benches stored as 2 ("Vikram Nath, Sanjay Karol" kept as one name in `judges`).
     """
+    coram = bench_from_text(rec.get("text") or "")
+    if coram:
+        return coram
     if rec.get("bench_size"):
         return int(rec["bench_size"])
     judges = rec.get("judges") or []
     if len(judges) > 1:
         return len(judges)  # a single name may be only the author (the dataset's `judge` field)
-    return bench_from_text(rec.get("text") or "")
+    return None
 
 
 def metadata_view(rec: dict) -> dict:

@@ -81,26 +81,24 @@ One JSON object per line: `{"qid": "dev01", "text": "...", "offence_date": "2025
 The two "what would make" rows are a few lines of prose each. They are the judge's reference when the pool arrives, and they make
 disagreements about relevance visible before grading starts.
 
-### 1.4 What the current sample can and cannot support (measured)
+### 1.4 What the current corpus can and cannot support (measured)
 
-`python -m eval.feasibility` on the 30 candidate queries against the corpus in the repository (M1's
-200 judgments, **all decided in 2025**, 2026-10-07):
+`python -m eval.feasibility` on the 30 queries against the corpus in the repository (M1's **468 judgments: 268 from 2024 and 200 from 2025**, 2026-10-07):
 
 | Verdict | Count | Which |
 |---|---|---|
-| ok | 3 | dev05, test05, test16 |
-| thin (3 or fewer judgments contain the words or mention the section) | 17 | dev01, dev03, dev04, dev07, dev08, dev09, dev10, test01, test02, test03, test04, test06, test09, test11, test12, test13, test17 |
-| empty | 10 | dev02, dev06, test07, test08, test10, test14, test15, test18, test19, test20 |
+| ok (4 or more judgments contain the words and mention the section) | 14 | dev03, dev05, dev07, dev08, dev09, dev10, test02, test03, test04, test05, test09, test11, test16, test19 |
+| thin (3 or fewer) | 10 | dev01, dev04, test01, test06, test08, test10, test12, test13, test17, test18 |
+| empty | 6 | dev02, dev06, test07, test14, test15, test20 |
 
-What this means for the work:
+`ok` is a low bar. `python -m eval.feasibility --target 10` asks for 10 candidate judgments per query: **only 4 of the 30 reach it**, 20 have fewer and 6 have none. The same
+command estimates the corpus size that would be needed. What this means for the work:
 
-* **The sample cannot support the plan.** One year of judgments has no older case to be overruled, so every type C query is thin or
-  empty; type D needs both readings of a number (the IPC and the BNS) and the sample has a single mention of section 103 and none of
-  section 318. The corpus has to grow, in volume and in years, before the queries are final. That is a request to the corpus owner, not
-  a reason to bend the queries to the sample.
-* Re-run the tool whenever the corpus changes, and only then fix the final query list.
-* Counts are approximate in both directions: the regular expression can miss a spelling of a section reference, and a judgment that
-  mentions a section need not be about it. Use them to find queries with nothing to find, not to rank queries.
+* Do not start grading on this corpus. The pool for a query is the top 20 of each system; with 3 matching judgments most of it is noise and `Recall@10` is meaningless.
+* The corpus has **no pair of an overruled and an overruling judgment**, so the type C queries cannot show the treatment signal and `harmful@10` has nothing to count. Both ends must be added.
+* It has nothing before 2024. Older IPC-era precedents are what the type A queries are meant to reach.
+* Counts are approximate in both directions: the regular expression can miss a spelling of a section reference, and a judgment that mentions a section need not be about it. Use them to
+  find queries with nothing to find, not to rank queries. The full reasoning and the estimate are in docs/INTEGRATION_REVIEW.md, "Is the corpus enough?".
 
 ### 1.5 30 candidate queries (10 dev, 20 test)
 

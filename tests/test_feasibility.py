@@ -149,3 +149,39 @@ def test_a_query_the_parser_cannot_read_is_not_counted_as_zero(corpus, monkeypat
     object.__setattr__(providers, "search", search)
     rows = feasibility.analyse([Query("q", "murder intention", None, "dev", "A")], providers, {}, Counter({"2025": 3}), 100)
     assert rows[0].candidates == 1 and rows[0].all_terms is None and rows[0].verdict == "ok"
+
+
+# ------------------------------------------------------------------------------------------------------------ the target estimate
+def _frow(qid, type_="A", all_terms=None, sections=None):
+    from eval.feasibility import Row
+
+    return Row(qid=qid, type=type_, split="dev", text=qid, offence_date=None, candidates=100, all_terms=all_terms, sections=sections or {})
+
+
+def test_matches_is_the_smaller_of_the_word_count_and_the_section_count_and_type_d_uses_sections_only():
+    from eval.feasibility import matches
+
+    assert matches(_frow("a", all_terms=7)) == 7
+    assert matches(_frow("b", all_terms=20, sections={"3": 2})) == 2  # the section is the limit
+    assert matches(_frow("c", all_terms=1, sections={"3": 9})) == 1  # the words are the limit
+    assert matches(_frow("d", "D", all_terms=None, sections={"103": 4})) == 4
+    assert matches(_frow("e", "D", all_terms=50, sections={"103": 4})) == 4  # a bare-number query is not counted by its words
+    assert matches(_frow("f", all_terms=0)) == 0
+
+
+def test_the_size_estimate_is_hand_checkable_and_separates_queries_that_need_specific_judgments():
+    from eval.feasibility import size_for_target
+
+    rows = [_frow("q1", all_terms=5), _frow("q2", all_terms=20, sections={"3": 2}), _frow("q3", "D", sections={"103": 4}), _frow("q4", all_terms=0), _frow("q5", all_terms=12)]
+    est = size_for_target(rows, total=100, target=10)
+    assert est["reach"] == ["q5"] and est["below"] == ["q1", "q2", "q3"] and est["none"] == ["q4"]
+    # corpus size at which each query with matches would reach 10, if matches grew in proportion: 100 * 10 / matches
+    #   q5 83.3, q1 200, q3 250, q2 500; the median of the four is the third (250), 90% of four rounds up to the fourth (500)
+    assert est["size_for_median"] == 250 and est["size_for_share"] == 500
+
+
+def test_the_size_estimate_has_no_number_when_no_query_matches_anything():
+    from eval.feasibility import size_for_target
+
+    est = size_for_target([_frow("q1", all_terms=0), _frow("q2", all_terms=0)], total=100, target=10)
+    assert est["size_for_share"] is None and est["none"] == ["q1", "q2"]

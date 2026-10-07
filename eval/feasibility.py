@@ -3,6 +3,7 @@
     python -m eval.feasibility                       # the queries in eval/queries.jsonl, else the 30 suggested candidates
     python -m eval.feasibility --queries my.jsonl    # any file in the queries.jsonl format
     python -m eval.feasibility --json
+    python -m eval.feasibility --target 10           # how far the corpus is from 10 candidate judgments per query
 
 For each query it reports, from the real search and the corpus text:
 
@@ -163,6 +164,48 @@ def analyse(
     return rows
 
 
+def matches(row: Row) -> int:
+    """How many judgments could answer the query at all: those holding every content word, and, where the query names a section, those that
+    mention it too (the smaller of the counts). A bare-number query (type D) is counted by its section mentions only."""
+    counts: list[int] = []
+    if row.all_terms is not None and row.type != "D":
+        counts.append(row.all_terms)
+    if row.sections:
+        counts.append(min(row.sections.values()))
+    return min(counts) if counts else 0
+
+
+def size_for_target(rows: Sequence[Row], total: int, target: int, share: float = 0.9) -> dict[str, object]:
+    """How far the corpus is from giving every query `target` candidate judgments.
+
+    Queries with no match at all cannot be helped by a bigger random sample: they need specific judgments added. For the others the estimate
+    assumes the number of matches grows in proportion to the corpus; it is a rough lower bound for rare topics (their matches grow more
+    slowly) and counts matches, which are not all relevant."""
+    counts = {r.qid: matches(r) for r in rows}
+    positive = sorted(total * target / n for n in counts.values() if n > 0)
+    if positive:
+        index = min(len(positive) - 1, max(0, -(-int(share * 100) * len(positive) // 100) - 1))
+        for_share, for_median = positive[index], positive[len(positive) // 2]
+    else:
+        for_share = for_median = None
+    return {
+        "target": target, "reach": sorted(q for q, n in counts.items() if n >= target), "below": sorted(q for q, n in counts.items() if 0 < n < target),
+        "none": sorted(q for q, n in counts.items() if n == 0), "size_for_share": for_share, "size_for_median": for_median, "share": share,
+    }
+
+
+def render_target(est: dict[str, object], queries: int) -> str:
+    def rounded(x: object) -> str:
+        return "n/a" if x is None else f"about {int(round(float(x), -2 if float(x) >= 1000 else -1)):,}"
+
+    out = ["", f"Target: {est['target']} candidate judgments per query.",
+           f"  reach it: {len(est['reach'])} of {queries}; below it: {len(est['below'])}; none at all: {len(est['none'])} ({', '.join(est['none']) or '-'})",
+           "  Queries with none need specific judgments added; a bigger random sample does not help them.",
+           f"  If matches grew in proportion to the corpus, {rounded(est['size_for_median'])} judgments would bring the median query to the target and "
+           f"{rounded(est['size_for_share'])} would bring {int(float(est['share']) * 100)}% of the others. Treat both as rough: rare topics grow more slowly and a match is not a relevant judgment."]
+    return chr(10).join(out)
+
+
 def render(rows: Sequence[Row], years: Counter[str], total: int, source: str) -> str:
     year_text = ", ".join(f"{y}: {n}" for y, n in sorted(years.items())) or "none"
     out = [f"Corpus: {total} judgments ({year_text}). Queries from {source}.", "",
@@ -186,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-k", type=int, default=100, help="candidates counted per query (default 100, the re-ranking depth)")
     ap.add_argument("--json", action="store_true", help="print the rows as JSON")
     ap.add_argument("--strict", action="store_true", help="exit 1 when any query is empty")
+    ap.add_argument("--target", type=int, default=0, help="also say how far the corpus is from this many candidate judgments per query (for example 10)")
     args = ap.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -220,10 +264,16 @@ def main(argv: list[str] | None = None) -> int:
     numbers = [n for q in queries for n in section_numbers(q.text)]
     mentions, years, total = scan_corpus(judgments, numbers)
     rows = analyse(queries, providers, mentions, years, args.k)
+    estimate = size_for_target(rows, total, args.target) if args.target > 0 else None
     if args.json:
-        print(json.dumps({"corpus": {"documents": total, "years": dict(sorted(years.items()))}, "rows": [asdict(r) for r in rows]}, indent=2))
+        payload = {"corpus": {"documents": total, "years": dict(sorted(years.items()))}, "rows": [asdict(r) for r in rows]}
+        if estimate:
+            payload["target"] = estimate
+        print(json.dumps(payload, indent=2))
     else:
         print(render(rows, years, total, source))
+        if estimate:
+            print(render_target(estimate, len(rows)))
     return 1 if args.strict and any(r.verdict == "empty" for r in rows) else 0
 
 

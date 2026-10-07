@@ -33,35 +33,85 @@ here). `main` (`76ad44c`), `m2-statute` (`f0a629d`) and `m3-treatment` (`7777a6b
 | Whole suite | 519 passed, 2 expected failures (the known `parse_atom` and `extract_refs` cases) |
 | `eval.feasibility` on the 30 candidate queries | 3 answerable, 17 thin, 10 empty (the 200 judgments are all from 2025) |
 
-## Request tracker, 2026-10-07 (after the fourth pass)
+## Request tracker, 2026-10-07 (after the fifth pass, the 468-judgment corpus)
 
-What each owner was asked to do in the earlier reviews, and where it stands in the code that is pushed. `main` now also holds M1's last pull request (`1c90283`);
-it still fails `python eval/smoke.py` (2 failures, M2's map and file) until M2 fixes them.
+What each owner was asked to do in the earlier reviews, and where it stands in the code that is pushed.
 
 | Owner | Asked for | State |
 |---|---|---|
 | **M1** | ISO dates in `judgments.jsonl` | **Done**; the tokenised copy is not regenerated (no longer read, still tracked) |
-| | `bench_size` never 0 | **Done** (null); **values for 3-judge benches still wrong** (0 of 10) |
-| | `parse_atom` raises `ValueError` | **Done** (malformed queries no longer raise) |
-| | zone splitter without hard-coded paragraph numbers | **Done in effect** (0 of 63 matches score 0; zone coverage 79% median) |
-| | a rebuild command, stop committing the index | **Half**: `python -m m1_index.index build` works (2.6 MB); `ingest build` empties the corpus when `data/raw` is empty and `download()` is a no-op; the old 74 MB files are still tracked |
-| | tests for M1 | **Open** (none in the repository) |
-| | a larger corpus with older judgments | **Open** (200 judgments, all 2025: 27 of the 30 queries have little to find) |
-| | lnc.ltc, query optimisation, library BM25 comparison | **Open** (not in the code) |
-| | flip `stubs.search` | **Open**, and now possible: the search contract passes smoke |
-| **M2** | paragraph numbers are not sections | **Done** (a `Section`/`u/s` word is required) |
-| | the statute forms of the Build Guide | **6 of 9**; `IPC 302`, `BNS 103` on their own and `BNS 3(5)` are not read, `Cr.P.C.` comes out as IPC |
-| | bare numbers by offence date, `offence_id` | **Done** for dates; `offence_id` on 123 of 2,755 references |
-| | 20 to 40 mapped sections, official sources | 20 rows, **but `statute_map.csv` is malformed** (second header on line 3) and has no sources |
+| | `bench_size` never 0, and right | **Done** (null when unknown; 294 of 306 agree with the coram line, 27 of 35 benches of 3 or more are right; one 5-judge bench is stored as 6) |
+| | `parse_atom` raises `ValueError` | **Done** |
+| | zones without hard-coded paragraph numbers | **Done in effect** |
+| | a rebuild command, stop committing the index | **Half**: `python -m m1_index.index build` works (7.0 MB at 468 judgments); `ingest build` empties the corpus when `data/raw` is empty, `download()` is a no-op, the old 74 MB files are still tracked |
+| | a larger corpus with older judgments | **Half**: **468 judgments, 2024 (268) and 2025 (200)**; nothing before 2024, so no overruled case of the doctrine queries is in it (see "Is the corpus enough?") |
+| | titles | **New defect**: 259 of the 268 new records have the title cut to `X v. v.` (M1-19) |
+| | tests for M1, lnc.ltc, query optimisation, library BM25 comparison | **Open** |
+| | flip `stubs.search` | **Open, and possible**: with search and statute real the smoke gate passes |
+| **M2** | paragraph numbers are not sections | **Done** |
+| | the Build Guide's statute forms | **6 of 9** (`S. 302 I.P.C.`, `Cr.P.C.`, `BNS 3(5)` fail); `BNS 103` and `IPC 302` are read again |
+| | `statute_map.csv` in the contract layout | **Done** (36 rows, valid); no official sources |
+| | bare numbers resolved by the offence date | **Regressed**: the governing act is right but the section's act is `UNKNOWN` (4,053 of 7,266 references; M2-12) |
 | | drop the `STUB-` special case, use `common.config.load_config` | **Open** |
-| | `extract_refs` not quadratic | **Done** |
-| | commit `doc_statutes.jsonl`, then flip the switch | **Open**: the switch was flipped on `main` without the file |
-| **M3** | M3's review fixes (cache key, gold merge, same parties, data checks) | **Done** (D-024) |
-| | evidence is the reasoning sentence, keep the `[[ ]]` marker | **Open** (no push since 2026-10-06) |
-| | running headers are not appeal history | **Open** |
-| | name extraction keeps neighbouring words | **Open** |
-| | the gold set (two labellers), the Gemini run, the F1 table, `doc_health.jsonl` | **Open** (`data/treatment_gold.csv` has only its header) |
+| | commit `doc_statutes.jsonl` or build it in CI, then flip the switch | **Open** (CI now builds it; the switch is still `true` here) |
+| **M3** | review fixes (cache key, gold merge, same parties, data checks) | **Done** (D-024) |
+| | evidence is the reasoning sentence, keep the `[[ ]]` marker, running headers, appeal history, name extraction, memory and errors, pinned model, committed label cache | **Done** (D-033, `fbcc054`) |
+| | the gold set (two labellers), the Gemini run, the F1 table, `citations.jsonl` and `doc_health.jsonl` for the corpus | **Open** (`data/treatment_gold.csv` has only its header) |
 | | flip `stubs.health` and `stubs.authority` | **Open** (waits for the files above) |
+| **M4** | everything in the build guide that code can do | **Done**; the queries are adopted; grading, the gold list, tuning and the test table need people and a bigger corpus |
+
+## Third update, 2026-10-07 (evening): the 468-judgment corpus
+
+`m1-index` moved by four commits (`97b355c` "Update 468-document corpus and ingestion cleanup", and a merge of `main`), `m2-statute` by one (`c244ff1`), `m3-treatment` by one
+(`fbcc054`, also on `main` through pull request #4). All were merged into `m4-rank` (one conflict, `pytest.ini`). `main` was not touched.
+
+| Measured here | Before | Now |
+|---|---|---|
+| Corpus | 200 judgments, all 2025 | **468 judgments: 2024 (268) and 2025 (200)**, 55 with a bench of 3 or more |
+| Search index | 2.6 MB | 7.0 MB; about 1.1 s to load, about 2 ms per query |
+| `python eval/smoke.py` with search and statute real | failed (the map) | **0 failed** (first time) |
+| Tests | 539 passed, 8 failed (all M2's) | **561 passed, 1 expected failure** |
+| `eval.feasibility` on the 30 queries | 3 ok, 17 thin, 10 empty | **14 ok, 10 thin, 6 empty** |
+| Queries with at least 10 candidate judgments (`--target 10`) | not measured | **4 of 30**; 20 have fewer, 6 have none |
+| M3 `extract` (no labels), mentions / resolved / edges | 6,539 / 51 (0.8%) / 20 | 19,224 / 269 (1.4%) / 127 |
+
+New findings:
+
+| # | Severity | Finding |
+|---|---|---|
+| M1-19 | **High** | **259 of the 268 new 2024 records have their title cut to `X v. v.`** (for example `Satender Kumar Antil v. v.`): the text has `v.` on a line of its own and the respondent after it, and the extractor takes the `v.` twice. It shows in every result list, and it breaks M3's own-title test: the case's caption is then counted as appeal history (**2,762 tags, 14.4% of mentions, 2,728 of them in the 2024 part; the 2025 part has 34, 0.5%**). It also stops name-based citation resolution for those cases |
+| M1-20 | Low | One 5-judge Constitution Bench (`2024_2_946_988_EN`) is stored as a bench of 6 |
+| M2-12 | **High** | A bare section number is resolved to the right governing act but its own act stays `UNKNOWN`: `section 103` dated 2025-02-01 gives `UNKNOWN 103`, and **4,053 of 7,266 references in the corpus have act `UNKNOWN` (56%; it was 4 of 2,755)**. Type D queries (bare numbers) therefore get no continuity. `BNS 3(5)` is read as `BNS 3` |
+| M2 | Fixed | `statute_map.csv` is valid (36 rows), `BNS 103` is read, the real `continuity()` runs, M2's own tests pass |
+| M3 | Fixed | review findings 5 to 10 (D-033). Still no labels, no gold set, no `doc_health.jsonl` |
+
+### Is the corpus enough? (measured with `python -m eval.feasibility --target 10`)
+
+**No.** Counting, for each query, the judgments that contain all its content words (and mention the section where it names one): the median query has **3**, the
+mean 4.5; 20 of 30 have fewer than 5; 6 have none (`dev02`, `dev06`, `test07`, `test14`, `test15`, `test20`). And the structural gap is larger than the counts:
+
+* **No overruling pair is in the corpus.** Of the 25 cases the grading criteria name for the type C queries, only the *overruling* judgment of one doctrine (`High Court Bar
+  Association, Allahabad`, 2024) is present, and its overruled partner (`Asian Resurfacing`, 2018) is not. *Koushal* and *Navtej*, *Joseph Shine*, *Puttaswamy*, *Sushila Aggarwal*,
+  *Tofan Singh*, *Mukesh Singh*, *Mohan Lal*, *Arjun Panditrao* and the others are not documents here (some are cited by 3 to 21 judgments). Without both ends the treatment signal
+  cannot lower anything and `harmful@10` has nothing to count. This needs **specific** judgments, from 2010 to 2023.
+* **Nothing before 2024**, although type A queries need IPC-era precedents and type D needs both codes.
+* Rare topics (sedition, mob lynching, organised crime, section 318 in either code) have 0 to 3 matches.
+
+What it would take, as estimates (assumptions in the tool's output: matches grow in proportion to the corpus, and a match is not a relevant judgment):
+
+| Aim | Corpus size by random sampling | By targeted additions |
+|---|---|---|
+| the median query reaches 10 candidate judgments | about 1,200 | |
+| 90% of the queries that have a match reach 10 | about 4,700 | |
+| every query reaches 10 | not reachable by sampling (6 queries have none) | **at most about 180 extra matching judgments** (the sum of the shortfalls; fewer where queries share them), plus the 25 named older cases |
+
+So the recommendation is a **targeted top-up, not a bigger random sample**: about 1,500 to 2,000 judgments in all, being a base spread over 2015 to 2025 (so IPC-era precedents exist),
+plus, for each of the 30 queries, the judgments the search finds for its words (up to 15 more each), plus the overruled and overruling judgments of each doctrine query (the 25 cases
+named in `eval/examples/query_grade_criteria.example.md`). Choosing documents by the query's words is corpus building, not labelling; record it. Size is no obstacle: the index is
+about 15 KB per judgment, so 2,000 judgments are about 30 MB, loaded in a few seconds.
+
+Grading effort does not grow with the corpus: the pool is the union of the top 20 of each system, at most 30 x 3 x 20 = 1,800 documents per judge before overlap (the pooling tool reports the
+real number). That, not the corpus, is what limits how many queries two people can grade.
 
 ## Second update, 2026-10-07 (later): M1's and M2's final pushes
 

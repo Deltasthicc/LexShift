@@ -132,3 +132,21 @@ def test_cache_key_depends_on_the_few_shot_examples(tmp_path):
     assert few.label([w]) == 1  # the zero-shot label is not reused
     row = cache.get(cache_key("m", w, few.shots))
     assert row["shots"] == few.shots and row["n_examples"] == 1
+
+
+def test_moving_model_aliases_are_refused_and_the_answering_version_is_recorded(tmp_path, monkeypatch):
+    from m3_treatment.classifier import gemini_caller, is_moving_alias
+
+    assert is_moving_alias("gemini-flash-latest") and is_moving_alias("gemini-3-flash-preview")
+    assert not is_moving_alias("gemini-2.5-flash") and not is_moving_alias("gemini-3.8-flash")
+    monkeypatch.setenv("GEMINI_API_KEY", "unused")
+    with pytest.raises(RuntimeError, match="pin a stable model id"):
+        gemini_caller("gemini-flash-latest")
+
+    def call(prompt):
+        return json.dumps([{"id": 0, "label": "neutral", "confidence": 0.5}])
+
+    call.model_version = "gemini-2.5-flash-001"
+    LLMLabeller(LLMCache(tmp_path / "c.jsonl"), "gemini-2.5-flash", call, batch_size=1).label(["[[X v. Y]] was cited."])
+    row = json.loads((tmp_path / "c.jsonl").read_text(encoding="utf-8"))
+    assert row["model"] == "gemini-2.5-flash" and row["model_version"] == "gemini-2.5-flash-001"

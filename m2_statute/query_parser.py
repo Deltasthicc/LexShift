@@ -51,7 +51,7 @@ def parse_query(query: str, offence_date: str | None = None) -> QueryStatutes:
             sec_str, act_str = m.group(5), None
 
         secs = parse_sections(sec_str)
-        act = normalize_act(act_str, effective_date) if act_str else ("BNS" if effective_date >= "2024-07-01" else "IPC")
+        act = normalize_act(act_str, effective_date) if act_str else "UNKNOWN"
         if not act_str:
             notes.append(f"bare sections {secs} resolved to {act} by offence date")
 
@@ -62,10 +62,11 @@ def parse_query(query: str, offence_date: str | None = None) -> QueryStatutes:
     refs = [StatuteRef(act=a, section=s, count=c) for (a, s), c in counts.items()]
 
     # 2. Prose Lexicon Extraction (Type B Queries)
-    for word, off_id in PROSE_LEXICON.items():
-        if re.search(rf"\b{word}\b", query, re.IGNORECASE):
-            refs.append(StatuteRef(act="UNKNOWN", section="PROSE", offence_id=off_id, count=1))
-            notes.append(f"Lexicon matched '{word}' to {off_id}")
+    if not refs:
+        for word, off_id in PROSE_LEXICON.items():
+            if re.search(rf"\b{word}\b", query, re.IGNORECASE):
+                refs.append(StatuteRef(act="UNKNOWN", section="PROSE", offence_id=off_id, count=1))
+                notes.append(f"Lexicon matched '{word}' to {off_id}")
 
     # 3. Governing Act Logic
     known_acts = {r.act for r in refs if r.act != "UNKNOWN"}

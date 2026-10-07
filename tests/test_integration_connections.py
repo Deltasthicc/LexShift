@@ -155,8 +155,9 @@ def test_m1_year_and_bench_filters_work_on_the_real_metadata(m1):
 
     total = len(search("murder", k=500))
     assert total > 0
-    in_2025 = len(search("murder", k=500, filters={"year": 2025}))
-    assert in_2025 == total  # the committed sample is 2025 only; this was 0 before the date fix
+    years = sorted({int(h.doc_id[:4]) for h in search("murder", k=500)})
+    per_year = {y: len(search("murder", k=500, filters={"year": y})) for y in years}
+    assert sum(per_year.values()) == total and all(n > 0 for n in per_year.values())  # the year filter partitions the matches (it was 0 before the date fix)
     assert len(search("murder", k=500, filters={"year": 1999})) == 0
     # the bench filter reads M1's bench_size: known benches are counted, a bench that is not in the data matches nothing
     two = len(search("murder", k=500, filters={"bench_size": 2}))
@@ -193,7 +194,7 @@ def test_the_real_chain_returns_real_hits_through_rank(m1, make_providers):
     real_search = Providers(search, good.parse_query, good.continuity, good.health, good.authority, frozenset({"statute", "health", "authority"}))
     # health and authority fixtures only know ids A-D, so rank with b0 (BM25 only): the real M1 ids flow through
     results = rank("BNS 103", "2025-01-10", k=5, config="b0", providers=real_search)
-    assert len(results) == 5 and all(r.doc_id.startswith("2025_") for r in results)
+    assert len(results) == 5 and all(r.doc_id[:4].isdigit() and 1950 <= int(r.doc_id[:4]) <= 2025 for r in results)
     assert results[0].final == 1.0 and results[0].raw["rel"] > results[-1].raw["rel"] > 0
     assert json.dumps([r.to_dict() for r in results])  # serialisable end to end
 
