@@ -150,3 +150,19 @@ def test_moving_model_aliases_are_refused_and_the_answering_version_is_recorded(
     LLMLabeller(LLMCache(tmp_path / "c.jsonl"), "gemini-2.5-flash", call, batch_size=1).label(["[[X v. Y]] was cited."])
     row = json.loads((tmp_path / "c.jsonl").read_text(encoding="utf-8"))
     assert row["model"] == "gemini-2.5-flash" and row["model_version"] == "gemini-2.5-flash-001"
+
+
+def test_the_gemini_key_can_come_from_a_dotenv_file_without_overriding_the_shell(tmp_path, monkeypatch):
+    from m3_treatment.classifier import load_dotenv
+
+    env = tmp_path / ".env"
+    env.write_text('# comment\nGEMINI_API_KEY="from-file"\nexport OTHER_M3_TEST_VAR=x\n', encoding="utf-8")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OTHER_M3_TEST_VAR", raising=False)
+    load_dotenv(env)
+    import os
+
+    assert os.environ["GEMINI_API_KEY"] == "from-file" and os.environ["OTHER_M3_TEST_VAR"] == "x"
+    monkeypatch.setenv("GEMINI_API_KEY", "from-shell")
+    load_dotenv(env)
+    assert os.environ["GEMINI_API_KEY"] == "from-shell"  # the shell wins

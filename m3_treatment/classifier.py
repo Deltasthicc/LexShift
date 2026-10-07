@@ -183,6 +183,23 @@ def is_moving_alias(model: str) -> bool:
     return bool(re.search(r"latest|preview|exp", model))
 
 
+def load_dotenv(path: str | os.PathLike | None = None) -> None:
+    """Read KEY=VALUE lines from the repository's `.env` (git-ignored) into os.environ, never overriding a variable that
+    is already set. Only the offline labelling step calls it."""
+    from common.config import ROOT
+
+    env = Path(path) if path else ROOT / ".env"
+    if not env.is_file():
+        return
+    for line in env.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        os.environ.setdefault(key, value.strip().strip("'\""))
+
+
 def gemini_caller(model: str, temperature: float = 0.0) -> Callable[[str], str]:
     """A function prompt -> JSON text backed by the Gemini API (GEMINI_API_KEY).
 
@@ -194,8 +211,9 @@ def gemini_caller(model: str, temperature: float = 0.0) -> Callable[[str], str]:
 
     if is_moving_alias(model):
         raise RuntimeError(f"m3_treatment.llm.model {model!r} is a moving alias or a preview; pin a stable model id")
+    load_dotenv()
     if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
-        raise RuntimeError("set GEMINI_API_KEY to run the offline LLM labelling")
+        raise RuntimeError("no Gemini key: put GEMINI_API_KEY=... in the repository's .env file (git-ignored) or set it in the shell")
     client = genai.Client()
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
