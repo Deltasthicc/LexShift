@@ -416,6 +416,8 @@ def collect(wt: Path, py: str, state: dict[str, Any], force_build: bool) -> dict
     cfg = yaml.safe_load((wt / "common" / "config.yaml").read_text(encoding="utf-8"))
     facts["stubs"] = {k: bool(v) for k, v in (cfg.get("stubs") or {}).items()}
     judgments = wt / "data" / "processed" / "judgments.jsonl"
+    if not judgments.is_file() and (wt / "data" / "corpus" / "judgments.jsonl.xz").is_file():
+        run([py, "-m", "m1_index.ingest", "unpack"], wt, timeout=600)  # a fresh checkout holds the corpus packed, as a clone does
     facts["corpus"] = corpus_facts(judgments)
     digest = hashlib.sha1(judgments.read_bytes()).hexdigest() if judgments.is_file() else ""
     rebuild = force_build or state.get("built_for") != digest or not (wt / "data" / "processed" / "index" / "index.pkl.gz").exists()
