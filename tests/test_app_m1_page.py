@@ -58,7 +58,7 @@ def test_the_overview_counts_the_index_that_is_on_disk(explorer):
     assert o["tokens"] == o["positions"] == sum(o["zone_tokens"].values())
     assert o["zone_tokens"]["headnote"] == 3 and o["zone_tokens"]["holding"] == 4 + 2 + 1  # "of" is a stop word: 4 + (theft, properti) + 1
     assert o["bm25"] == {"k1": 1.2, "b": 0.75} and o["zone_weights"]["headnote"] == 3.0
-    assert o["capabilities"]["lnc_ltc"] == "not implemented"  # probed from m1_index.scoring, not asserted by the page
+    assert o["capabilities"]["lnc_ltc"] == "implemented"  # probed from m1_index.scoring, not asserted by the page
     assert {"term": "intent", "df": 2} in o["top_terms"] and {"term": "theft", "df": 1} in o["top_terms"]
 
 

@@ -4,6 +4,9 @@ Supports:
   - Boolean: AND, OR, NOT
   - Proximity: /s (same sentence), /p (same paragraph), /k (within k tokens)
   - Phrases: "common intention"
+
+Precedence, tightest first: proximity, NOT, AND, OR (parentheses override). Every malformed query raises ValueError and nothing
+else; the engine then treats the text as a bag of words.
 """
 
 from __future__ import annotations
@@ -164,7 +167,10 @@ def parse_query(query: str):
     if not tokens:
         raise ValueError("Empty query")
 
-    node, position = parse_or(tokens, 0)
+    try:
+        node, position = parse_or(tokens, 0)
+    except RecursionError as exc:  # hundreds of nested parentheses or NOTs: a malformed query like any other
+        raise ValueError("Query is nested too deeply") from exc
     if position != len(tokens):
         raise ValueError(f"Unexpected token {tokens[position]!r} at position {position}")
 

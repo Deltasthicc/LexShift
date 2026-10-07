@@ -150,18 +150,24 @@ def test_m1_answers_free_text_boolean_and_edge_queries_with_contract_valid_share
         assert search(query, k=5) == [] or contracts.check_hits(search(query, k=5), 5) == []  # never an exception
 
 
+def _year_of_id(doc_id: str) -> int:
+    import re
+
+    return int(re.search(r"\d{4}", doc_id).group())
+
+
 def test_m1_year_and_bench_filters_work_on_the_real_metadata(m1):
     from m1_index import search
 
-    total = len(search("murder", k=500))
+    total = len(search("murder", k=10000))
     assert total > 0
-    years = sorted({int(h.doc_id[:4]) for h in search("murder", k=500)})
-    per_year = {y: len(search("murder", k=500, filters={"year": y})) for y in years}
+    years = sorted({_year_of_id(h.doc_id) for h in search("murder", k=10000)})  # S_ ids (supplementary volumes) carry the year after the prefix
+    per_year = {y: len(search("murder", k=10000, filters={"year": y})) for y in years}
     assert sum(per_year.values()) == total and all(n > 0 for n in per_year.values())  # the year filter partitions the matches (it was 0 before the date fix)
-    assert len(search("murder", k=500, filters={"year": 1999})) == 0
+    assert len(search("murder", k=10000, filters={"year": 1999})) == 0
     # the bench filter reads M1's bench_size: known benches are counted, a bench that is not in the data matches nothing
-    two = len(search("murder", k=500, filters={"bench_size": 2}))
-    assert 0 < two <= total and len(search("murder", k=500, filters={"bench_size": 9})) == 0
+    two = len(search("murder", k=10000, filters={"bench_size": 2}))
+    assert 0 < two <= total and len(search("murder", k=10000, filters={"bench_size": 8})) == 0
 
 
 def test_m1_results_are_ranked_deterministic_and_respect_k(m1):
@@ -194,12 +200,12 @@ def test_the_real_chain_returns_real_hits_through_rank(m1, make_providers):
     real_search = Providers(search, good.parse_query, good.continuity, good.health, good.authority, frozenset({"statute", "health", "authority"}))
     # health and authority fixtures only know ids A-D, so rank with b0 (BM25 only): the real M1 ids flow through
     results = rank("BNS 103", "2025-01-10", k=5, config="b0", providers=real_search)
-    assert len(results) == 5 and all(r.doc_id[:4].isdigit() and 1950 <= int(r.doc_id[:4]) <= 2025 for r in results)
+    assert len(results) == 5 and all(1950 <= _year_of_id(r.doc_id) <= 2025 for r in results)
     assert results[0].final == 1.0 and results[0].raw["rel"] > results[-1].raw["rel"] > 0
     assert json.dumps([r.to_dict() for r in results])  # serialisable end to end
 
 
-@pytest.mark.parametrize("module_name", ["m1_index.text_tokenizer", "m1_index.tokenizer"])
+@pytest.mark.parametrize("module_name", ["m1_index.tokenizer"])
 def test_stopwords_still_load_when_nltk_rejects_a_redirected_path(module_name, monkeypatch):
     """NLTK 3.9+ refuses a corpus file that resolves outside the folder it found, which is what a Windows packaged app's redirected
     AppData looks like; M1's tokenizer then read nothing and the whole search failed to import. It reads the file directly instead."""

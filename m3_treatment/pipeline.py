@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -33,6 +34,7 @@ from m3_treatment.classifier import (
     LLMLabeller,
     cache_key,
     gemini_caller,
+    local_context,
     per_class_report,
     shots_fingerprint,
     valid_negative,
@@ -203,10 +205,25 @@ def resolution_report(rows: list[dict], n_docs: int, corpus_size: int, seconds: 
 # ----------------------------------------------------------------------------------------------------------------
 # label-llm
 # ----------------------------------------------------------------------------------------------------------------
+# Only "doubted" and "overruled" can lower a score (common.schema.NEGATIVE_LABELS), and a judgment that does either says so in words near the citation.
+# The scope "cued" sends the LLM only the resolved windows that contain such a word, about 4 percent of them. It trades some recall (a treatment
+# stated without any of these words is not looked at) for a labelling run of dozens of requests instead of hundreds, and it is reported as a limitation.
+NEGATIVE_CUES = re.compile(
+    r"over-?rul|per\s+incuriam|(?:no\s+longer|not)\s+(?:a\s+)?good\s+law|doubt|reconsider|larger\s+bench|criticis|disapprov|cannot\s+agree|not\s+(?:correct|sound)|"
+    r"wrongly\s+decided|incorrectly\s+decided|erroneous|incorrect|dissent|overturn|departed\s+from|not\s+approved|no\s+longer",
+    re.IGNORECASE,
+)
+
+
 def in_llm_scope(m: dict, scope: str) -> bool:
+    """scope all: every mention; resolved: those linked to a corpus judgment; cued: resolved ones whose text near the citation holds a negative cue."""
     if m["is_self"] or m["is_appeal_history"]:
         return False
-    return scope == "all" or bool(m["cited_doc"])
+    if scope == "all":
+        return True
+    if not m["cited_doc"]:
+        return False
+    return scope != "cued" or bool(NEGATIVE_CUES.search(local_context(m["marked_window"])))
 
 
 POOL_COLUMNS = ("window", "label")

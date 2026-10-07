@@ -12,6 +12,7 @@ never guess.
 
 
 import csv
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +21,11 @@ import yaml
 from common.schema import STATUTE_MAP_COLUMNS, SchemaError, StatuteMapRow
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def base_section(section: str) -> str:
+    """'3(5)' -> '3', '438(1)' -> '438', '120-B' -> '120B': a section without its sub-clauses (the map lists whole sections)."""
+    return re.sub(r"\(.*$", "", re.sub(r"[^A-Z0-9()]", "", section.upper()))
 
 
 @lru_cache(maxsize=None)
@@ -51,12 +57,12 @@ def relation_between(
 ) -> StatuteMapRow | None:
     """Best (highest-weight) map row linking provision A and provision B, in either direction."""
     rows = load_map() if rows is None else rows
-    a = (act_a, sec_a.upper())
-    b = (act_b, sec_b.upper())
+    a = (act_a, base_section(sec_a))
+    b = (act_b, base_section(sec_b))
     best: StatuteMapRow | None = None
     for r in rows:
-        old = (r.old_act, r.old_section.upper())
-        new = (r.new_act, r.new_section.upper())
+        old = (r.old_act, base_section(r.old_section))
+        new = (r.new_act, base_section(r.new_section))
         if (old, new) in ((a, b), (b, a)) and (best is None or r.weight > best.weight):
             best = r
     return best

@@ -22,8 +22,8 @@ paths:                              # relative to the repository root
 #                false = call the real module. Flip a switch in the same commit that makes the real
 #                function pass `python eval/smoke.py`. Override per run with LEXSHIFT_STUBS=none|all|search,health
 stubs:
-  search: true       # M1  m1_index.search
-  statute: true       # M2  m2_statute.parse_query + continuity (back to true: doc_statutes.jsonl is not committed, so the smoke gate failed; flip it in the commit that adds the sample's doc_statutes.jsonl)
+  search: false      # M1  m1_index.search (real: the compact index over data/processed/judgments.jsonl; `make unpack` then `make build-index`)
+  statute: false     # M2  m2_statute.parse_query + continuity (real: needs data/processed/doc_statutes.jsonl, `make build-statutes`; CI builds it)
   health: true       # M3  m3_treatment.health
   authority: true    # M3  m3_treatment.authority
 
@@ -68,7 +68,7 @@ m3_treatment:
     batch_size: 30                  # windows per request (the free tier allows 20 requests a day per model)
     min_interval_s: 1.0             # pacing between requests (free-tier rate limits)
     max_retries: 4
-    scope: resolved                 # resolved = only mentions linked to a corpus judgment (the only ones that move a score); all
+    scope: cued                     # cued = resolved mentions with a negative cue (overrul, doubt, ...) near the citation, the only ones that can lower a score; resolved = every mention linked to a corpus judgment; all
     few_shot_per_class: 2           # examples taken from the gold set's few-shot pool, excluded from evaluation
   labels: llm                       # label source for citations.jsonl: llm | baseline
   min_confidence: 0.5               # a negative label below this confidence does not lower health

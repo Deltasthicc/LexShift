@@ -17,9 +17,11 @@ jobs:
       - run: pip install -r requirements.txt
       - name: NLTK stop-word list (M1's tokenizer reads it at import)
         run: python -m nltk.downloader stopwords
-      - name: M1 search index (built from the committed judgments.jsonl)
+      - name: Corpus (data/corpus/judgments.jsonl.xz is the tracked copy; unpacking checks its SHA-256)
+        run: python -m m1_index.ingest unpack
+      - name: M1 search index (built from the unpacked judgments.jsonl)
         run: python -m m1_index.index build
-      - name: M2 per-judgment statute file (built from the committed judgments.jsonl)
+      - name: M2 per-judgment statute file (built from the unpacked judgments.jsonl)
         run: python -m m2_statute.extractor build
       - name: Unit tests
         run: python -m pytest

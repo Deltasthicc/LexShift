@@ -128,10 +128,8 @@ class IndexExplorer:
         meta = index.doc_meta
         years = Counter(m.get("year") for m in meta.values())
         benches = Counter(m.get("bench_size") for m in meta.values())
-        zones = tuple(ZONES)
-        zone_tokens = {z: sum(lens.get(z, 0) for lens in index.doc_lengths.values()) for z in zones}
-        postings = index.postings_map
-        df_top = sorted(((t, len(p)) for t, p in postings.items()), key=lambda x: (-x[1], x[0]))[:14]
+        zone_tokens = {z: index.stats["zone_tokens"].get(z, 0) for z in ZONES}  # counted once, when the index was built
+        df_top = index.top_terms(14)
         size = None
         try:
             size = (self._index_dir() / "index.pkl.gz").stat().st_size
@@ -142,10 +140,10 @@ class IndexExplorer:
             "docs": len(meta),
             "years": {str(k): v for k, v in sorted(years.items(), key=lambda kv: (kv[0] is None, kv[0]))},
             "bench": {("unknown" if k is None else str(k)): v for k, v in sorted(benches.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))},
-            "terms": len(postings),
-            "postings": sum(len(p) for p in postings.values()),
-            "positions": sum(len(e["positions"]) for p in postings.values() for e in p.values()),
-            "tokens": sum(zone_tokens.values()),
+            "terms": index.stats["terms"],
+            "postings": index.stats["postings"],
+            "positions": index.stats["positions"],
+            "tokens": index.stats["tokens"],
             "zone_tokens": zone_tokens,
             "zone_weights": dict(searcher.ZONE_WEIGHTS),
             "avg_zone_length": {z: round(v, 1) for z, v in eng.avg_zone_length.items()},
@@ -162,9 +160,10 @@ class IndexExplorer:
     def _capabilities() -> dict[str, Any]:
         """What the pushed code does and does not contain, probed from the code itself where that is possible."""
         from m1_index import scoring
+        from m1_index.index import InvertedIndex
 
         try:
-            scoring.lnc_ltc_scores(["probe"], None)
+            scoring.lnc_ltc_scores(["probe"], InvertedIndex())  # an empty index: the call only has to run
             lnc = "implemented"
         except NotImplementedError:
             lnc = "not implemented"
@@ -215,13 +214,24 @@ class IndexExplorer:
             raise ExplorerError(400, "bad_input", str(exc)) from exc
         entries = eng.index.postings_map.get(term, {})
         rows = []
-        for doc_id, entry in sorted(entries.items(), key=lambda kv: (-kv[1]["tf"], kv[0]))[:12]:
+        for doc_id in self._top_tf(eng.index, term, 12):  # rank by term frequency without decoding every posting, then decode the 12 shown
+            entry = entries[doc_id]
             m = eng.doc_meta.get(doc_id, {})
             rows.append({
                 "doc_id": doc_id, "title": m.get("title"), "date": m.get("date"), "tf": entry["tf"], "zones": dict(entry["zones"]),
                 "positions": entry["positions"][:10], "n_positions": len(entry["positions"]),
             })
         return {"word": word, "term": term, "df": len(entries), "docs": eng.doc_count, "idf": round(eng._idf(term), 4), "postings": rows}
+
+    @staticmethod
+    def _top_tf(index: Any, term: str, n: int) -> list[str]:
+        """The ids of the n documents where the term is most frequent (ties by document id), read from the posting offsets."""
+        tp = index.term_postings(term)
+        if tp is None:
+            return []
+        ids, p_doc = index.doc_ids, index.p_doc
+        best = sorted(((-tp.tf(i), ids[p_doc[i]]) for i in range(tp.lo, tp.hi)))[:n]
+        return [doc_id for _, doc_id in best]
 
     # -- queries ------------------------------------------------------------------------------------
     def _parse(self, query: str) -> tuple[str, Any, list[str]]:

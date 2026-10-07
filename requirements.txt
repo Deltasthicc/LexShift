@@ -17,11 +17,14 @@ google-genai>=1.0        # M3: Gemini client for the offline few-shot treatment 
 # After installing, run once (needs the network):  python -m nltk.downloader stopwords
 nltk>=3.8                # M1: Porter stemmer and the English stop-word list (the corpus above)
 
+# Corpus download (python -m m1_index.ingest ...). Needed only to rebuild the corpus from the public bucket, not to run the demo.
+# The bucket is read over plain HTTPS (urllib, no AWS tooling); neither library does any retrieval, they only read files.
+pyarrow>=14.0            # M1: reads the dataset's per-year metadata.parquet (title, date, citation, ...)
+pymupdf>=1.24            # M1: PDF -> text; every IR step after that is our own code
+
+rank_bm25>=0.2.2         # M1: cross-check of our BM25 against the library's (python -m m1_index.benchmark), never in the live path
+
 # --- planned, uncomment in the commit that first imports them ---
-# M1 (m1_index):      pandas, pyarrow          parquet metadata
-#                     pymupdf                  PDF -> text
-#                     awscli or boto3          public S3 bucket, unsigned
-#                     rank_bm25                sanity check against our own BM25 only, never in the live path
 # M3 (m3_treatment):  scikit-learn             tf-idf + logistic-regression baseline, Cohen's kappa
 #                     networkx                 PageRank (or implement power iteration ourselves)
 #                     an LLM client            offline few-shot labelling only, outputs cached, never at demo time

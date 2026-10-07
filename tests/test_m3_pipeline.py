@@ -251,3 +251,23 @@ def test_missing_inputs_are_one_clear_line(project, capsys):
     assert pipeline.main(["citations"]) == 1  # no m3_mentions.jsonl yet
     err = capsys.readouterr().err
     assert err.startswith("error:") and "Traceback" not in err
+
+
+# ---------------------------------------------------------------------------------------------------------------- the labelling scope
+def _mention(window: str, cited: str | None = "B", **kw) -> dict:
+    return {"is_self": False, "is_appeal_history": False, "cited_doc": cited, "marked_window": window, **kw}
+
+
+def test_cued_scope_sends_only_resolved_windows_with_a_negative_cue():
+    from m3_treatment import pipeline
+
+    overruling = _mention("We hold that [[Koushal]] was wrongly decided and is overruled.")
+    doubting = _mention("The view in [[Koushal]] needs to be reconsidered by a larger bench.")
+    plain = _mention("As held in [[Koushal]], the appeal is dismissed.")
+    unresolved = _mention("[[Koushal]] was overruled.", cited=None)
+    appeal = _mention("[[Koushal]] was overruled.", is_appeal_history=True)
+    own = _mention("[[Koushal]] was overruled.", is_self=True)
+    got = [pipeline.in_llm_scope(m, "cued") for m in (overruling, doubting, plain, unresolved, appeal, own)]
+    assert got == [True, True, False, False, False, False]
+    assert pipeline.in_llm_scope(plain, "resolved") and not pipeline.in_llm_scope(unresolved, "resolved")  # the wider scopes are unchanged
+    assert pipeline.in_llm_scope(unresolved, "all") and not pipeline.in_llm_scope(own, "all")

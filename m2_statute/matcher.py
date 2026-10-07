@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from common.schema import DocStatutes, QueryStatutes, StatuteMapRow, StatuteRef
-from m2_statute.mapping import REPO_ROOT, load_config, load_map, relation_between
+from m2_statute.mapping import REPO_ROOT, base_section, load_config, load_map, relation_between
 
 log = logging.getLogger(__name__)
 
@@ -54,31 +54,28 @@ def best_match(
     
     for q in query_refs:
         for d in doc_refs:
-            # If both have the same OFFENCE_ID (lexicon prose match)
-            if q.offence_id and d.offence_id and q.offence_id == d.offence_id:
-                cand = (1.0, f"Lexicon Match: {q.offence_id} = {d.offence_id}")
-            # Strict Act/Section match
-            elif q.act != "UNKNOWN" and d.act != "UNKNOWN":
-                if (q.act, q.section.upper()) == (d.act, d.section.upper()):
+            if q.act != "UNKNOWN" and d.act != "UNKNOWN":
+                # Both name their code: the same provision (sub-clauses ignored) or the statute map's relation, scored by its weight
+                if (q.act, base_section(q.section)) == (d.act, base_section(d.section)):
                     cand = (1.0, f"{_label(q)} = {_label(d)} (same provision)")
                 else:
                     row = relation_between(q.act, q.section, d.act, d.section, rows)
                     if row is None:
                         continue
                     cand = (row.weight, f"{_label(q)} -> {_label(d)} ({row.relation})")
+            elif q.offence_id and d.offence_id and q.offence_id == d.offence_id:
+                # A prose query ("murder") carries an offence id and no code: it matches a judgment section of the same offence
+                cand = (1.0, f"Lexicon Match: {q.offence_id} = {d.offence_id}")
             else:
                 continue
 
             if best is None or cand[0] > best[0]:
                 best = cand
-                
+
     return best
 
 
 def continuity(qs: QueryStatutes, doc_id: str) -> tuple[float, str]:
-    if doc_id.startswith("STUB-"):
-        return 0.0, "Document not found or no statutes extracted"
-
     doc_refs = load_doc_refs(str(_doc_statutes_path()))
     
     # Strict contract: raise KeyError if document is utterly absent

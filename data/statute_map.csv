@@ -3,7 +3,7 @@ IPC,302,BNS,103,equivalent,1.0,MHA,Murder
 IPC,304,BNS,105,equivalent,1.0,MHA,Culpable Homicide
 IPC,307,BNS,109,equivalent,1.0,MHA,Attempted Murder
 IPC,120B,BNS,61,equivalent,1.0,MHA,Criminal Conspiracy
-IPC,124A,BNS,152,equivalent,1.0,MHA,Sedition
+IPC,124A,BNS,152,modified_elements,0.5,"PRS Legislative Brief, Bharatiya Nyaya (Second) Sanhita 2023: sedition removed as an offence, clause 152 (acts endangering sovereignty) may retain aspects of it: https://prsindia.org/files/bills_acts/bills_parliament/2023/Legislative_Brief_The_Bharatiya_Nyaya_(Second)_Sanhita_2023.pdf",Sedition
 IPC,376,BNS,63,equivalent,1.0,MHA,Rape
 IPC,379,BNS,303,equivalent,1.0,MHA,Theft
 IPC,384,BNS,308,equivalent,1.0,MHA,Extortion

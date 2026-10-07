@@ -109,8 +109,6 @@ M2_ADVERSARIAL = {
 def test_m2_extractor_scales_linearly_on_adversarial_text(name):
     from m2_statute.extractor import extract_refs
 
-    if name == "act followed by paragraph numbers":
-        pytest.xfail("known: extract_refs checks each match against every earlier match (quadratic); see docs/INTEGRATION_REVIEW.md, M2 finding 7")
     assert_scales_linearly(lambda t: extract_refs(t, "2025-01-01"), M2_ADVERSARIAL[name])
 
 

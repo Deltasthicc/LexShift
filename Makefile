@@ -2,7 +2,7 @@
 # (the README lists them). Activate your virtualenv first.
 PY ?= python
 
-.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check watch figures ui docmeta download build-index build-statutes build-citations build-health
+.PHONY: help setup test smoke demo eval tune pool qrels check-data conformance feasibility final-check watch figures ui docmeta download corpus unpack build-index build-statutes build-citations build-health
 
 help:
 	@echo "setup            install requirements.txt"
@@ -21,7 +21,9 @@ help:
 	@echo "figures          draw the pipeline diagram for the report (docs/figures)"
 	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
-	@echo "download         M1: fetch the AWS Open Data judgments"
+	@echo "unpack           M1: data/corpus/judgments.jsonl.xz -> data/processed/judgments.jsonl (a fresh clone runs this first, no network)"
+	@echo "download         M1: rebuild the corpus from the public AWS bucket (catalog, PDFs, text, judgments.jsonl; about 1.5 GB for 2025-2015)"
+	@echo "corpus           M1: pack the rebuilt judgments.jsonl into data/corpus/ (the copy that is tracked in git)"
 	@echo "build-index      M1: the search index, from data/processed/judgments.jsonl (once, about 20 s)"
 	@echo "build-statutes   M2: doc_statutes.jsonl"
 	@echo "build-citations  M3: citations.jsonl"
@@ -68,8 +70,14 @@ ui:
 docmeta:
 	$(PY) -m app.docmeta
 
+unpack:
+	$(PY) -m m1_index.ingest unpack
+
 download:
 	$(PY) -m m1_index.ingest download
+
+corpus:
+	$(PY) -m m1_index.ingest pack
 
 # Only the index is built here. `python -m m1_index.ingest build` is not part of this target: with an empty data/raw it rewrites
 # data/processed/judgments.jsonl with zero records (docs/INTEGRATION_REVIEW.md, M1 finding 13).

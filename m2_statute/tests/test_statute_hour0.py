@@ -41,10 +41,14 @@ def test_continuity_reads_doc_statutes(tmp_path, monkeypatch):
     monkeypatch.setattr(matcher, "_doc_statutes_path", lambda: f)
     assert continuity(parse_query("BNS 103"), "D1") == (1.0, "BNS 103 -> IPC 302 (equivalent)")
 
-def test_stub_ids_score_zero_without_reading_file():
-    score, why = continuity(parse_query("BNS 103"), "STUB-001")
-    assert score == 0.0 and why == matcher.NOT_FOUND_EXPLANATION
-    assert "STUB-001" not in matcher.MISSING_DOC_IDS
+def test_a_stand_in_id_is_just_a_document_that_is_not_in_the_file(tmp_path, monkeypatch):
+    """No special case for STUB- ids: the real continuity() never answers for a document it has not read (the old shortcut hid exactly that)."""
+    f = tmp_path / "doc_statutes.jsonl"
+    f.write_text("", encoding="utf-8")
+    monkeypatch.setattr(matcher, "_doc_statutes_path", lambda: f)
+    matcher.MISSING_DOC_IDS.clear()
+    assert continuity(parse_query("BNS 103"), "STUB-001") == (0.0, matcher.NOT_FOUND_EXPLANATION)
+    assert "STUB-001" in matcher.MISSING_DOC_IDS
 
 
 def test_missing_real_doc_scores_zero_and_is_recorded(tmp_path, monkeypatch):

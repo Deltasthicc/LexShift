@@ -36,7 +36,7 @@ from common.config import load_config, resolve_path  # noqa: E402
 from common.io import read_jsonl  # noqa: E402
 from common.schema import Citation, DocHealth, DocStatutes, Judgment, SchemaError  # noqa: E402
 
-ID_PATTERN = re.compile(r"^\d{4}_\d+_\d+_\d+(?:_[A-Za-z]{2,3})?$")
+ID_PATTERN = re.compile(r"^(?:S_)?\d{4}_\d+_\d+_\d+(?:_[A-Za-z]{2,3})?$")  # S_ marks the dataset's supplementary SCR volumes (S_1985_1_741_749_EN)
 CORAM = re.compile(r"\[([^\[\]]{3,300}?),\s*(?:JJ|J|CJI)\.?\s*\]")
 CRIMINAL = re.compile(r"\b(?:IPC|BNS|BNSS|Cr\.?\s?P\.?\s?C\.?|Indian Penal Code)\b")
 CONTROLS = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f]")  # form feed (\x0c) is a legitimate page break

@@ -7,7 +7,7 @@ import re
 
 from common.schema import QueryStatutes, SchemaError, StatuteRef
 from m2_statute.mapping import load_config
-from m2_statute.extractor import MEGA_PAT, parse_sections, normalize_act
+from m2_statute.extractor import MEGA_PAT, family_of, normalize_act, parse_sections
 
 _PROCEDURAL = {"CRPC", "BNSS"}
 
@@ -41,7 +41,8 @@ def parse_query(query: str, offence_date: str | None = None) -> QueryStatutes:
     # Set default date if none provided to ensure deterministic resolution
     effective_date = offence_date or "2020-01-01"
 
-    # 1. Standard Citation Extraction
+    # 1. Standard citation extraction. A bare section takes its code from the offence date (before 1 July 2024 IPC and CrPC, from then BNS and BNSS);
+    #    a number the statute map knows as a CrPC or BNSS section is procedural, any other is substantive. Without an offence date it stays UNKNOWN: never guessed.
     for m in MEGA_PAT.finditer(query):
         if m.group(1):
             sec_str, act_str = m.group(1), m.group(2)
@@ -50,14 +51,16 @@ def parse_query(query: str, offence_date: str | None = None) -> QueryStatutes:
         else:
             sec_str, act_str = m.group(5), None
 
-        secs = parse_sections(sec_str)
-        act = normalize_act(act_str, effective_date) if act_str else "UNKNOWN"
-        if not act_str:
-            notes.append(f"bare sections {secs} resolved to {act} by offence date")
-
-        for s in secs:
-            key = (act, s)
-            counts[key] = counts.get(key, 0) + 1
+        for s in parse_sections(sec_str):
+            if act_str:
+                act = normalize_act(act_str, effective_date)
+            elif offence_date is not None and family_of(s) != "ambiguous":
+                act = _act_for_date(offence_date, family_of(s) == "procedural")
+                notes.append(f"bare section {s} resolved to {act} by offence date")
+            else:
+                act = "UNKNOWN"
+                notes.append(f"bare section {s} has no act" + ("" if offence_date is not None else " and no offence date was given") + ": left UNKNOWN")
+            counts[(act, s)] = counts.get((act, s), 0) + 1
 
     refs = [StatuteRef(act=a, section=s, count=c) for (a, s), c in counts.items()]
 
