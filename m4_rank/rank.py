@@ -73,7 +73,7 @@ def _call(where: str, fn, *args):
         return fn(*args)
     except (KeyError, FileNotFoundError) as exc:
         detail = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
-        raise ArtefactError(f"{where}: {detail} ({type(exc).__name__}; rebuild the module's artefacts and try again)") from exc
+        raise ArtefactError(f"{where}: {detail} ({type(exc).__name__}; run `python -m app.setup` to restore the module's data, then try again)") from exc
 
 
 @dataclass

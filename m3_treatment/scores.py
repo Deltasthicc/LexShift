@@ -24,7 +24,7 @@ from common.schema import NEGATIVE_LABELS
 def _table() -> dict[str, dict]:
     path = resolve_path("doc_health")
     if not path.exists():
-        raise FileNotFoundError(f"{path} not found; build it with `python -m m3_treatment.scores build`")
+        raise FileNotFoundError(f"{path} not found; run `python -m app.setup` (restores it from the files in git, no API key), or rebuild it with `make m3`")
     return {r["doc_id"]: r for r in read_jsonl(path)}
 
 

@@ -105,6 +105,22 @@ def restore_derived(cfg: dict) -> None:
         say(f"  {dst.name}: restored ({info['rows']} rows)")
 
 
+def quick_restore(cfg: dict | None = None) -> list[str]:
+    """What the server does on start: put back whatever data file is missing (the corpus, the statute, treatment, title and citation data) from the files in git.
+    Takes seconds and builds nothing; the search index is left to `python -m app.setup`. Returns the names it restored."""
+    cfg = cfg or load_config()
+    missing = [k for k in ("judgments", *DERIVED) if not resolve_path(k, cfg).is_file()]
+    if not missing:
+        return []
+    if "judgments" in missing and CORPUS_PACK.is_file():
+        from m1_index import ingest
+
+        ingest.unpack()
+    if any(k in missing for k in DERIVED):
+        restore_derived(cfg)
+    return missing
+
+
 def index_ok(documents: int) -> tuple[bool, str]:
     try:
         from m1_index.index import InvertedIndex

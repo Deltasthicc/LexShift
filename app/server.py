@@ -247,6 +247,16 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
+    try:  # a clone that skipped `python -m app.setup` gets its missing data files back from git instead of a "not found" on the first search
+        from app import setup as _setup
+
+        restored = _setup.quick_restore()
+        if restored:
+            print(f"Restored from the files in git: {', '.join(restored)}")
+        if not (_setup.ROOT / "data" / "processed" / "index" / "index.pkl.gz").is_file():
+            print("WARNING: the search index is missing. Run `python -m app.setup` (about 3 minutes), then start again.", file=sys.stderr)
+    except SystemExit as exc:
+        print(f"WARNING: could not restore the data files: {exc}", file=sys.stderr)
     service = Service()
     try:
         server = make_server(args.host, args.port, service, args.verbose)
