@@ -557,8 +557,21 @@ name lanes and never people (commit authors are not read).
 * **M3.** Only `doubted` and `overruled` can lower a score, and a judgment that does either says so in words near the citation. The new labelling scope `cued` (now the default) sends the LLM only resolved windows with such a word
   (1,010 of 25,475, about 34 requests and 0.2 million input tokens, instead of 845 requests), the rest are `neutral` with confidence 0 ("not classified"), which cannot move a score and keeps their edge in PageRank. The price is
   recall: a treatment stated without any cue word is not looked at; it is a stated limitation. `citations build` still refuses to run until every in-scope window has a cached label, and **no label exists yet for the new
-  corpus because the run needs a Gemini API key** (`.env`, see `.env.example`; `python -m m3_treatment.pipeline label-llm`, resumable). Until it is run `stubs.health` and `stubs.authority` stay `true`.
+  corpus because the run needs a Gemini API key** (`.env`, see `.env.example`; `python -m m3_treatment.pipeline label-llm`, resumable). **Update, same night: the key was added, the 1,010 windows were labelled (see D-039).**
 
+
+### D-039 (2026-10-07, night) M3 is real on the 4,819-judgment corpus; every provider is real; a single-judge qrels mode
+* **Labels and build.** The cached Gemini labels now cover all 1,010 `cued` windows (1,439 rows in `data/llm_labels/m3_llm_labels.jsonl`). `citations build` and `health` produced 160,705 citation records: 142 `overruled`, 65 `doubted`,
+  304 `followed`, 17 `distinguished`, the rest neutral or not classified; 188 valid negatives (the citing bench is at least as large as the cited one; 19 negatives were not counted for a smaller citing bench). Health is lowered for 48
+  judgments (31 overruled, 17 doubted); the lowest ones include *Sowmithri Vishnu*, *V. Revathi* (overruled by *Joseph Shine*), *Raj Kumar Karwal* and *Kanhaiyalal* (NDPS section 67, *Tofan Singh*), *P. Rathinam* (*Gian Kaur*),
+  *Salauddin Abdulsamad Shaikh* and *Navjot Sandhu*. `stubs.health` and `stubs.authority` are `false`; `python eval/smoke.py` passes with all four providers real; CI runs `python -m m3_treatment.pipeline build` from the committed cache.
+* **A bug of mine in D-038, fixed.** With the `cued` scope an unclassified window is `neutral` with confidence 0, and `run_health` kept only edges with confidence above 0, so PageRank saw 788 edges, not the 9,453 distinct
+  resolved ones. A resolved, non-appeal citation is now an edge whatever its label (weight 1.0 if the model did not look at it, the model's confidence otherwise): 25,319 edges.
+* **Known error of the resolver (not fixed).** A mention of *Frick India Ltd. v. Union of India* (1989) in a "case law cited" list of a 2014 judgment is linked to *V. Revathi v. Union of India* (1988) by name and year, and its
+  window ("held per incuriam") then counts as a second overruling of *Revathi*. Here it changes nothing (Revathi is overruled by *Joseph Shine* anyway), but it shows a name-only link needs a check against the mention's own
+  reporter citation; recorded for the M3 owner.
+* **Single-judge qrels.** `python -m eval.make_qrels --round X --single-judge` builds qrels from `judge1.csv` alone and writes `agreement.md` saying "Single judge": no agreement, no kappa. It exists so a quick round (`eval/judging/quick`:
+  the 10 dev queries, the top 5 of B0, B1 and Full, 70 documents) can give a dev-split ablation for the video. The submission still needs two judges (`round1`), and any number from a single judge must be called one.
 
 ## Open questions
 

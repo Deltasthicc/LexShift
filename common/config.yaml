@@ -24,8 +24,8 @@ paths:                              # relative to the repository root
 stubs:
   search: false      # M1  m1_index.search (real: the compact index over data/processed/judgments.jsonl; `make unpack` then `make build-index`)
   statute: false     # M2  m2_statute.parse_query + continuity (real: needs data/processed/doc_statutes.jsonl, `make build-statutes`; CI builds it)
-  health: true       # M3  m3_treatment.health
-  authority: true    # M3  m3_treatment.authority
+  health: false      # M3  m3_treatment.health (real: needs data/processed/doc_health.jsonl, `make m3` after the cached labels in data/llm_labels/)
+  authority: false   # M3  m3_treatment.authority (real: PageRank over the resolved citations, same file)
 
 m1_index:
   bm25: {k1: 1.2, b: 0.75}          # textbook defaults, M1 may tune

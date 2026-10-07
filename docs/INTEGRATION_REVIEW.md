@@ -87,7 +87,7 @@ a map scan per candidate that made a full ranking take 2 s; the integration test
 |---|---|---|
 | **M1** | **Done.** `stubs.search` is `false`. | nothing for the code; a person should skim `data/corpus_manifest.csv` and the limits in `m1_index/README.md` |
 | **M2** | **Done except verification by people.** `stubs.statute` is `false`. | the other 35 map rows verified in two official sources (they cite only "MHA"); the 50-judgment precision check (`python -m m2_statute.audit_sample`) |
-| **M3** | Code complete; **blocked on `GEMINI_API_KEY`** for the new corpus (1,010 windows, about 34 requests). `stubs.health` and `stubs.authority` stay `true`. | the key in `.env`, `python -m m3_treatment.pipeline label-llm`, `make m3`, then flip the two switches; the gold set (two labellers) and the F1 table |
+| **M3** | **Done on the new corpus** (D-039): 1,010 windows labelled, health lowered for 48 judgments, authority from 25,319 edges; `stubs.health` and `stubs.authority` are `false`. | the gold set (two labellers) and the F1 table; the resolver's name-only links (the *Frick India* to *Revathi* case) |
 | **M4** | Done as far as code goes. Pooled round 1; interface merged. | two judges grade `eval/judging/round1`; the gold overruling list (by hand); then `python -m eval.make_qrels`, `python -m eval.run_ablation --tune`, `--split test`; a second pooling round once M3 is real |
 
 ## Third update, 2026-10-07 (evening): the 468-judgment corpus

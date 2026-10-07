@@ -526,8 +526,10 @@ def run_health() -> dict:
             continue
         if r.label in NEGATIVE_LABELS and not r.valid_negative:
             why_not["unknown bench" if r.citing_bench is None or r.cited_bench is None else "smaller citing bench"] += 1
-        if r.label in acfg["edge_labels"] and r.confidence > 0:
-            edges.append((r.citing_doc, r.cited_doc, r.confidence))
+        if r.label in acfg["edge_labels"]:
+            # A resolved, non-appeal citation is an edge. A window the LLM did not classify (scope "cued": no negative cue near the citation) is a plain
+            # neutral citation with confidence 0 and counts fully; a classified one counts with the LLM's confidence in its label.
+            edges.append((r.citing_doc, r.cited_doc, r.confidence if r.confidence > 0 else 1.0))
         if r.valid_negative and r.confidence >= min_conf:
             negatives[r.cited_doc].append(r)
         elif r.label == "followed" and r.confidence >= min_conf:

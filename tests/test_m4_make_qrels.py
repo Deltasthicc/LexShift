@@ -230,3 +230,21 @@ def test_reconcile_and_merge():
     assert merge_qrels({"q": {"a": 2}}, {("q", "a"): 2, ("r", "z"): 0}) == {"q": {"a": 2}, "r": {"z": 0}}
     with pytest.raises(make_qrels.QrelsBuildError):
         merge_qrels({"q": {"a": 2}}, {("q", "a"): 1})
+
+
+def test_a_single_judge_builds_qrels_and_says_so_in_the_agreement_file(round1, capsys):
+    ws, folder = round1
+    write_judge(folder, "judge1", lambda qid, doc: str(GOOD[doc]))
+    assert make_qrels.main(["--round", "r1", "--single-judge"]) == 0
+    assert load_qrels(ws.qrels_path)["dev1"]["B"] == 2
+    note = (folder / "agreement.md").read_text(encoding="utf-8")
+    assert "Single judge" in note and "kappa" in note and not (folder / "disagreements.csv").exists()
+
+
+def test_a_single_judge_must_still_grade_everything_unless_told_otherwise(round1, capsys):
+    ws, folder = round1
+    write_judge(folder, "judge1", lambda qid, doc: "" if doc == "A" else "1")
+    assert make_qrels.main(["--round", "r1", "--single-judge"]) == 2
+    assert not ws.qrels_path.exists() or not load_qrels(ws.qrels_path)
+    assert make_qrels.main(["--round", "r1", "--single-judge", "--allow-incomplete"]) == 0
+    assert "A" not in load_qrels(ws.qrels_path)["dev1"]

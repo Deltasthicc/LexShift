@@ -184,10 +184,42 @@ def render_agreement(round_name: str, report: Mapping, n_disagree: int, n_adjudi
     return "\n".join(lines) + "\n"
 
 
+def _single_judge(args: argparse.Namespace, round_dir: Path, expected: set[Pair], existing: Mapping[str, Mapping[str, int]], cfg: dict) -> int:
+    """qrels from one judge. Nothing is adjudicated and no agreement can be computed, and agreement.md says so: this is a stop-gap, not the two-judge protocol."""
+    path = round_dir / "judge1.csv"
+    if not path.exists():
+        raise QrelsBuildError(f"missing judge1.csv in {round_dir}: copy sheet_template.csv to judge1.csv and fill `grade` (or grade in the Judging page)")
+    grades, problems = read_judge_file(path, expected)
+    print(f"{len(grades)} of {len(expected)} documents graded by one judge (no agreement can be computed).")
+    if problems:
+        for line in problems[:12]:
+            print(f"  problem: {line}")
+        if not args.allow_incomplete:
+            print("qrels.tsv was NOT written. Grade every document (or --allow-incomplete to write only the graded rows).")
+            return 2
+        print("--allow-incomplete: writing only the graded rows.")
+    try:
+        merged = merge_qrels(existing, {pair: g for pair, g in grades.items()})
+    except QrelsBuildError as exc:
+        print(f"Cannot build qrels: {exc}")
+        return 2
+    qrels_path = resolve_path("qrels", cfg)
+    write_table(qrels_path, QRELS_COLUMNS, qrels_rows(merged), delimiter="\t")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    (round_dir / "agreement.md").write_text(
+        f"# Judge agreement: {args.round}\n\nGenerated {stamp}.\n\n"
+        f"**Single judge.** These {len(grades)} grades come from one person, so there is no agreement, no kappa and no adjudication. "
+        "Report any number computed from them as one-judge results." + "\n",
+        encoding="utf-8", newline="\n")
+    print(f"Wrote {sum(len(d) for d in merged.values())} judgements for {len(merged)} queries to {qrels_path} (single judge).")
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--round", default="round1")
     ap.add_argument("--allow-incomplete", action="store_true", help="write only the settled rows even if some are missing or unresolved")
+    ap.add_argument("--single-judge", action="store_true", help="build qrels from judge1.csv alone (no second judge, no agreement, no adjudication): a stop-gap for a quick round, reported as such in agreement.md; the submission needs two judges")
     ap.add_argument("--out", help="judging directory (default: paths.judging_dir)")
     return ap.parse_args(argv)
 
@@ -210,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
         unknown = sorted({qid for qid, _ in expected} - known)
         if unknown:
             raise QrelsBuildError(f"the template mentions queries that are not in queries.jsonl: {unknown[:5]}")
+        if args.single_judge:
+            return _single_judge(args, round_dir, expected, load_qrels(known_qids=known), cfg)
         files = {name: round_dir / f"{name}.csv" for name in ("judge1", "judge2")}
         missing = [str(p.name) for p in files.values() if not p.exists()]
         if missing:
