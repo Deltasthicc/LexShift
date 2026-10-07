@@ -60,6 +60,36 @@ What each owner was asked to do in the earlier reviews, and where it stands in t
 | | flip `stubs.health` and `stubs.authority` | **Open** (waits for the files above) |
 | **M4** | everything in the build guide that code can do | **Done**; the queries are adopted; grading, the gold list, tuning and the test table need people and a bigger corpus |
 
+## Sixth update, 2026-10-07 (night): the 4,819-judgment corpus; M1 and M2 finished, M3 waits for a key
+
+`m3-treatment` (+1, labels and the .env key loading) and `main` (the simplified interface, pull request #7) were merged into `m4-rank`. M1's corpus, index and ingest, M2's extractor and the M3 labelling scope were
+done in this branch at the owners' request (D-037, D-038). Measured here, not estimated:
+
+| Measured | Before (468 judgments) | Now (4,819) |
+|---|---|---|
+| Corpus | 468: 2024 (268) and 2025 (200) | **4,819**: 2005 to 2025 criminal-law judgments plus 8 older named cases; read from the public bucket (7,850 PDFs, 3.9 GB) |
+| Queries with at least 10 candidate judgments (`--target 10`) | 4 of 30; 6 with none | **26 of 30**; `test20` has none, `dev06`, `test07` and `test10` are thin |
+| Doctrines with both an overruled and an overruling judgment | 0 of 10 | **9 of 10** (*Mohan Lal* is not in the dataset) |
+| Search index | 7 MB, dict of dicts | **52.7 MB compact**, loads in about 2 s; full ranking of a query about 50 ms once warm |
+| `eval.conformance --module m2` | 3 FAIL | **0 FAIL, 10 PASS**: 9 of 9 statute forms, bare numbers by offence date |
+| Act UNKNOWN in M2's references | 56% to 68% | **37.2%** of 190,518 mentions |
+| Offence ids on references | 1,402 of 32,075 | **12,441 of 65,036** |
+| M3 `extract`: mentions / resolved / distinct edges / appeal history | 22,861 / 269 (1.7%) / 127 / 133 | **160,705 / 25,853 (16.1%) / 9,453 / 2,573 (1.6%)** |
+| Tests | 561 passed | **805 passed, 1 skipped** (full run on the merged tree) |
+| `python eval/smoke.py` (search and statute real) | 0 failed | **0 failed** |
+| Judging round 1 (`eval.pool --configs b0,b1`, real systems only) | none | **680 documents for 30 queries**, about 1,360 judgements for two judges |
+
+Fixed on the way: an `I.P.C.` / `Cr.P.C.` form never read (`\b` cannot follow a full stop, in M2's extractor and in the corpus filter); a sedition row that said `equivalent` (the PRS brief says it was removed);
+a titles bug (`State through CBI v. v. Arul Kumar`); OCR'd coram lines (a lost bracket, `ANDLOKESHWAR`, `&`, a closing `J`); an invented default date (`2020-01-01`) in `ingest`; `STUB-` special case in `continuity()`;
+a map scan per candidate that made a full ranking take 2 s; the integration tests that assumed a four-digit year at the start of every doc id.
+
+| Lane | State | What is still needed |
+|---|---|---|
+| **M1** | **Done.** `stubs.search` is `false`. | nothing for the code; a person should skim `data/corpus_manifest.csv` and the limits in `m1_index/README.md` |
+| **M2** | **Done except verification by people.** `stubs.statute` is `false`. | the other 35 map rows verified in two official sources (they cite only "MHA"); the 50-judgment precision check (`python -m m2_statute.audit_sample`) |
+| **M3** | Code complete; **blocked on `GEMINI_API_KEY`** for the new corpus (1,010 windows, about 34 requests). `stubs.health` and `stubs.authority` stay `true`. | the key in `.env`, `python -m m3_treatment.pipeline label-llm`, `make m3`, then flip the two switches; the gold set (two labellers) and the F1 table |
+| **M4** | Done as far as code goes. Pooled round 1; interface merged. | two judges grade `eval/judging/round1`; the gold overruling list (by hand); then `python -m eval.make_qrels`, `python -m eval.run_ablation --tune`, `--split test`; a second pooling round once M3 is real |
+
 ## Third update, 2026-10-07 (evening): the 468-judgment corpus
 
 `m1-index` moved by four commits (`97b355c` "Update 468-document corpus and ingestion cleanup", and a merge of `main`), `m2-statute` by one (`c244ff1`), `m3-treatment` by one

@@ -1,24 +1,19 @@
 <!doctype html>
-<html lang="en" data-motion="on" data-intro="pending">
+<html lang="en" data-motion="on">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LexShift</title>
   <meta name="description" content="Search Indian Supreme Court judgments ranked by relevance, statutory continuity and judicial treatment, with the evidence behind every status.">
-  <meta name="color-scheme" content="dark light">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230b1017'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23e8c27a' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='none' stroke='%236ea8ff' stroke-width='2'/%3E%3C/svg%3E">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2318181b'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23e3b35c' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='none' stroke='%236ea8ff' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/css/styles.css">
   <script src="/static/vendor/gsap/gsap.min.js" defer></script>
-  <script src="/static/vendor/gsap/ScrollTrigger.min.js" defer></script>
-  <script src="/static/vendor/gsap/ScrollToPlugin.min.js" defer></script>
   <script src="/static/vendor/gsap/Flip.min.js" defer></script>
   <script type="module" src="/static/js/main.js"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
-
-  <div class="ambient" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
-  <div class="progress" id="progress" aria-hidden="true"><i></i></div>
   <div class="busy" id="busy" aria-hidden="true"><i></i></div>
 
   <div class="notice" id="notice" role="status" hidden>
@@ -26,21 +21,20 @@
     <button type="button" class="notice-action" id="notice-details">Details</button>
   </div>
 
-  <header class="nav-wrap" id="nav-wrap">
-    <nav class="nav" id="nav" aria-label="Primary">
+  <header class="nav-wrap">
+    <nav class="nav container" aria-label="Primary">
       <a class="brand" href="#/" aria-label="LexShift, search">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
           <circle cx="16" cy="16" r="12" class="m1"/><circle cx="16" cy="16" r="7.5" class="m2"/><circle cx="16" cy="16" r="3" class="m3"/>
         </svg>
-        <span class="brand-name">LexShift</span>
+        <span>LexShift</span>
       </a>
-      <ul class="nav-links" id="nav-links">
-        <li class="nav-ind" id="nav-ind" aria-hidden="true"></li>
+      <ul class="nav-links">
         <li><a href="#/" data-route="search">Search</a></li>
-        <li><a href="#/method" data-route="method">Method</a></li>
-        <li><a href="#/evaluation" data-route="evaluation">Evaluation</a></li>
-        <li><a href="#/judging" data-route="judging">Judging</a></li>
-        <li><a href="#/index" data-route="index">Index</a></li>
+        <li><a href="#/index" data-route="index">Index <span class="mod mod-m1">M1</span></a></li>
+        <li><a href="#/statutes" data-route="statutes">Statutes <span class="mod mod-m2">M2</span></a></li>
+        <li><a href="#/treatment" data-route="treatment">Treatment <span class="mod mod-m3">M3</span></a></li>
+        <li><a href="#/ranking" data-route="ranking">Ranking <span class="mod mod-m4">M4</span></a></li>
       </ul>
       <div class="nav-tools">
         <button type="button" class="status-btn" id="status-btn" aria-haspopup="dialog" aria-controls="status-panel" aria-label="Show which modules are real and which are stand-ins">
@@ -54,398 +48,235 @@
     </nav>
   </header>
 
-  <main id="main" class="page">
-    <!-- ================================================================ SEARCH -->
+  <main id="main">
+    <!-- ================================================================ SEARCH: all four modules together -->
     <div id="view-search" data-view="search">
-      <section class="hero" id="top" aria-labelledby="hero-title">
-        <div class="hero-inner">
-          <h1 class="hero-title" id="hero-title" data-split>
-            Find the precedent
-            <span class="inline-art art-bars" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></span>
-            that is still safe
-            <span class="inline-art art-ring" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" class="ra"/><circle cx="20" cy="20" r="8" class="rb"/><circle cx="20" cy="20" r="2.6" class="rc"/></svg></span>
-            to cite.
-          </h1>
-          <p class="hero-lede" data-hero="lede">
-            Indian Supreme Court judgments, ranked by how well they match, whether the statute they applied still governs your offence date,
-            and how later benches treated them. Every status comes with the sentence that supports it.
-          </p>
+      <section class="hero container" id="top" aria-labelledby="hero-title">
+        <h1 class="hero-title" id="hero-title">Find the precedent that is still safe to cite.</h1>
+        <p class="lede">Supreme Court judgments ranked by four signals, each built by one module.</p>
 
-          <form class="searchbox" id="search-form" role="search" autocomplete="off" data-hero="form">
-            <div class="searchbar">
-              <label class="field field-query" for="q">
-                <span class="field-label">Query</span>
-                <input id="q" name="q" type="text" inputmode="search" spellcheck="false" maxlength="500" required
-                       placeholder="BNS 103, or: punishment for murder" aria-autocomplete="list" aria-controls="suggest" aria-expanded="false">
-              </label>
-              <label class="field field-date" for="date">
-                <span class="field-label">Offence date</span>
-                <input id="date" name="date" type="date" min="1950-01-01" max="2099-12-31">
-              </label>
-            </div>
-            <div class="cta-row">
-              <button type="submit" class="btn btn-primary magnetic" id="btn-search">Search precedents</button>
-              <button type="button" class="btn btn-secondary magnetic" id="btn-compare">Compare with BM25</button>
-            </div>
-            <div class="suggest" id="suggest" role="listbox" aria-label="Suggested queries" hidden></div>
-          </form>
-        </div>
+        <form class="searchbar" id="search-form" role="search" autocomplete="off">
+          <label class="field field-query" for="q">
+            <span class="field-label">Query</span>
+            <input id="q" name="q" type="text" inputmode="search" spellcheck="false" maxlength="500" required placeholder="BNS 103, or: punishment for murder">
+          </label>
+          <label class="field field-date" for="date">
+            <span class="field-label">Offence date</span>
+            <input id="date" name="date" type="date" min="1950-01-01" max="2099-12-31">
+          </label>
+          <button type="submit" class="btn btn-primary" id="btn-search">Search</button>
+        </form>
+        <div class="chips" id="examples" aria-label="Example queries"></div>
 
-        <div class="hero-art" id="hero-art" aria-hidden="true">
-          <div class="art-plate plate-a"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><b class="bar b-rel"></b><b class="bar b-cont"></b><b class="bar b-health"></b></div>
-          <div class="art-plate plate-b"><span class="seal"></span><i class="l1"></i><i class="l2"></i><i class="l3"></i></div>
-          <div class="art-lens">
-            <svg class="ring r1" viewBox="0 0 200 200"><circle cx="100" cy="100" r="92" class="arc a-rel"/><circle cx="192" cy="100" r="4.5" class="node n-rel"/></svg>
-            <svg class="ring r2" viewBox="0 0 200 200"><circle cx="100" cy="100" r="74" class="arc a-cont"/><circle cx="100" cy="26" r="4.5" class="node n-cont"/></svg>
-            <svg class="ring r3" viewBox="0 0 200 200"><circle cx="100" cy="100" r="56" class="arc a-health"/><circle cx="44" cy="100" r="4.5" class="node n-health"/></svg>
-            <svg class="ring r4" viewBox="0 0 200 200"><circle cx="100" cy="100" r="38" class="arc a-auth"/><circle cx="100" cy="138" r="4.5" class="node n-auth"/></svg>
-            <span class="glyph">&#167;</span>
-          </div>
-        </div>
-        <button type="button" class="scroll-cue" id="scroll-cue" aria-label="Scroll to how it works"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6"/></svg></button>
+        <ol class="formula" id="formula" aria-label="How the final score is made"></ol>
       </section>
 
-      <!-- ============================================================ RESULTS -->
-      <section class="workspace" id="workspace" aria-labelledby="ws-title" hidden>
-        <div class="container">
-          <header class="ws-head">
-            <div class="ws-heading">
-              <h2 class="ws-title" id="ws-title">Results</h2>
-              <p class="ws-sub" id="ws-sub"></p>
-            </div>
-          </header>
-
-          <div class="ws-toolbar" id="ws-toolbar">
-            <div class="ladder" id="ladder" role="radiogroup" aria-label="Signals used for ranking">
-              <span class="thumb" id="ladder-thumb" aria-hidden="true"></span>
-              <button type="button" role="radio" data-config="b0" aria-checked="false">Relevance</button>
-              <button type="button" role="radio" data-config="b1" aria-checked="false">+ Continuity</button>
-              <button type="button" role="radio" data-config="full" aria-checked="true">+ Treatment, authority</button>
-            </div>
-            <div class="segmented" id="mode" role="group" aria-label="View">
-              <button type="button" data-mode="ranked" class="seg-btn is-on" aria-pressed="true">Ranked</button>
-              <button type="button" data-mode="compare" class="seg-btn" aria-pressed="false">Compare</button>
-            </div>
-            <label class="select select-k" for="kk"><span class="sr">Number of results</span>
-              <select id="kk"><option>5</option><option selected>10</option><option>20</option><option>50</option></select>
-            </label>
-            <button type="button" class="chip-btn" id="only-lowered" aria-pressed="false">Treatment flagged only</button>
-            <button type="button" class="chip-btn" id="expand-all" aria-pressed="false">Expand all</button>
-            <button type="button" class="icon-btn" id="shortcuts-btn" aria-label="Keyboard shortcuts"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
+      <section class="container workspace" id="workspace" aria-labelledby="ws-title" hidden>
+        <div class="ws-head">
+          <div>
+            <h2 id="ws-title">Results</h2>
+            <p class="muted" id="ws-sub"></p>
           </div>
-
-          <div class="callout callout-warn" id="ws-stub" role="alert" hidden></div>
-          <div class="callout callout-error" id="ws-error" role="alert" hidden></div>
-          <div class="ws-grid">
-            <aside class="statutes" id="statutes" aria-label="How the query was read"></aside>
-            <div class="ws-main" id="ws-main" aria-live="polite"></div>
-          </div>
-          <p class="legal-note" id="legal-note">
-            These are treatment signals with evidence, produced by automated analysis of later judgments. They are not legal advice.
-            A signal can be wrong, can apply to one point of a judgment only, or can be superseded by a pending reference to a larger bench:
-            read the cited sentences and the judgments before relying on any of it.
-          </p>
-        </div>
-      </section>
-
-      <!-- ============================================================ METHOD (interest: horizontal accordion) -->
-      <section class="section" id="method" aria-labelledby="method-title">
-        <div class="container">
-          <header class="section-head" data-reveal>
-            <h2 id="method-title">One score, four signals, each of them inspectable.</h2>
-            <p>Hover or focus a signal to open it. The weights are read from the running configuration; nothing here is a stand-in unless it says so.</p>
-          </header>
-          <p class="formula" id="formula" data-reveal aria-label="final equals w r times relevance plus w s times continuity plus w h times treatment plus w a times authority">
-            <span class="f-final">final</span><span class="f-eq">=</span>
-            <button type="button" class="f-term t-rel" data-sig="rel">w<sub>r</sub>&middot;rel</button><span class="f-plus">+</span>
-            <button type="button" class="f-term t-cont" data-sig="cont">w<sub>s</sub>&middot;cont</button><span class="f-plus">+</span>
-            <button type="button" class="f-term t-health" data-sig="health">w<sub>h</sub>&middot;health</button><span class="f-plus">+</span>
-            <button type="button" class="f-term t-auth" data-sig="auth">w<sub>a</sub>&middot;auth</button>
-          </p>
-          <div class="acc" id="acc">
-            <article class="acc-slice sig-rel is-open" data-sig="rel" tabindex="0" aria-expanded="true" aria-label="Relevance">
-              <div class="acc-rail"><span class="acc-name">Relevance</span></div>
-              <div class="acc-body">
-                <h3>BM25 over the parts of a judgment</h3>
-                <p>Headnote, facts, arguments and holding are indexed as separate zones with their own weights, then scored with BM25 and normalised over the top candidates.</p>
-                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="rel">0.00</b></div>
-                <p class="acc-state" data-state="search"></p>
-              </div>
-            </article>
-            <article class="acc-slice sig-cont" data-sig="cont" tabindex="0" aria-expanded="false" aria-label="Continuity">
-              <div class="acc-rail"><span class="acc-name">Continuity</span></div>
-              <div class="acc-body">
-                <h3>Does the statute still govern?</h3>
-                <p>The offence date decides IPC or BNS. A BNS query still reaches IPC-era precedents, scaled by how much the provision changed: BNS 103 reaches IPC 302 in full.</p>
-                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="cont">0.00</b></div>
-                <p class="acc-state" data-state="statute"></p>
-              </div>
-            </article>
-            <article class="acc-slice sig-health" data-sig="health" tabindex="0" aria-expanded="false" aria-label="Treatment">
-              <div class="acc-rail"><span class="acc-name">Treatment</span></div>
-              <div class="acc-body">
-                <h3>What later benches did</h3>
-                <p>Lowered only by a valid negative treatment from a bench at least as large as the one that decided the case, and always shown with the sentence and a confidence.</p>
-                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="health">0.00</b></div>
-                <p class="acc-state" data-state="health"></p>
-              </div>
-            </article>
-            <article class="acc-slice sig-auth" data-sig="auth" tabindex="0" aria-expanded="false" aria-label="Authority">
-              <div class="acc-rail"><span class="acc-name">Authority</span></div>
-              <div class="acc-body">
-                <h3>Who cites it, and how big the bench</h3>
-                <p>PageRank over followed and neutral citations, weighted by bench size. Recency never raises or lowers it.</p>
-                <div class="acc-weight"><span class="bar"><i></i></span><b data-weight="auth">0.00</b></div>
-                <p class="acc-state" data-state="authority"></p>
-              </div>
-            </article>
-          </div>
-          <p class="card-note" id="weights-note" data-reveal>Reading the configuration.</p>
-        </div>
-      </section>
-
-      <!-- ============================================================ STATEMENT (desire: scrubbed text reveal) -->
-      <section class="section statement" id="statement" aria-label="The idea">
-        <div class="container">
-          <p class="statement-text" id="statement-text">A precedent can match your query perfectly and still be unsafe to cite. <em>The statute it applied may have been replaced</em>, or <em>a later bench may have overruled it</em>. LexShift puts statutory continuity and judicial treatment inside the ranking itself, and shows the sentence behind every status.</p>
-        </div>
-      </section>
-
-      <!-- ============================================================ PRINCIPLES (desire: pinned split) -->
-      <section class="section split-section" id="principles" aria-labelledby="principles-title">
-        <div class="container split" id="split">
-          <div class="split-left" id="split-left">
-            <h2 id="principles-title">Three rules the ranking does not break.</h2>
-            <p class="split-sub">They are written into the scoring, not added afterwards.</p>
-            <ol class="split-dots" id="split-dots" aria-hidden="true"><li class="is-on"></li><li></li><li></li></ol>
-            <p class="split-now" id="split-now">Old precedents still count</p>
-          </div>
-          <div class="split-right">
-            <article class="rule" data-rule="0" data-title="Old precedents still count">
-              <div class="rule-art" aria-hidden="true">
-                <svg viewBox="0 0 360 220" class="diagram">
-                  <rect x="24" y="40" width="112" height="56" rx="14" class="d-box"/><text x="80" y="74" text-anchor="middle" class="d-text">IPC 302</text>
-                  <rect x="224" y="40" width="112" height="56" rx="14" class="d-box d-on"/><text x="280" y="74" text-anchor="middle" class="d-text">BNS 103</text>
-                  <path d="M140 68 H220" class="d-line"/><path d="M212 60 L222 68 L212 76" class="d-line"/>
-                  <rect x="24" y="132" width="312" height="14" rx="7" class="d-track"/><rect x="24" y="132" width="312" height="14" rx="7" class="d-fill f-cont"/>
-                  <text x="24" y="176" class="d-small">equivalent: full weight carries over</text>
-                </svg>
-              </div>
-              <h3>Old precedents still count.</h3>
-              <p>The BNS replaced the IPC on 1 July 2024, but a BNS query still retrieves IPC-era judgments. Continuity lowers a result only in proportion to how much the law changed.</p>
-            </article>
-            <article class="rule" data-rule="1" data-title="No keyword matching for treatment">
-              <div class="rule-art" aria-hidden="true">
-                <svg viewBox="0 0 360 220" class="diagram">
-                  <rect x="24" y="36" width="312" height="12" rx="6" class="d-track"/><rect x="24" y="62" width="150" height="12" rx="6" class="d-track"/>
-                  <rect x="182" y="62" width="154" height="12" rx="6" class="d-fill f-health"/>
-                  <rect x="24" y="88" width="312" height="12" rx="6" class="d-track"/><rect x="24" y="114" width="210" height="12" rx="6" class="d-track"/>
-                  <rect x="24" y="152" width="136" height="34" rx="10" class="d-box d-on"/><text x="92" y="174" text-anchor="middle" class="d-text d-sm">cited case</text>
-                  <path d="M258 74 V150 H166" class="d-line"/>
-                </svg>
-              </div>
-              <h3>No keyword matching for treatment.</h3>
-              <p>Only the sentences around a specific cited case are classified. Words such as &ldquo;overruled&rdquo; in an objection, or &ldquo;set aside&rdquo; on appeal, are not an overruling of a precedent.</p>
-            </article>
-            <article class="rule" data-rule="2" data-title="Newer is not stronger">
-              <div class="rule-art" aria-hidden="true">
-                <svg viewBox="0 0 360 220" class="diagram">
-                  <path d="M24 188 H336" class="d-line"/>
-                  <rect x="44" y="108" width="36" height="80" rx="8" class="d-fill f-auth"/><rect x="116" y="68" width="36" height="120" rx="8" class="d-fill f-auth"/>
-                  <rect x="188" y="128" width="36" height="60" rx="8" class="d-fill f-auth"/><rect x="260" y="48" width="36" height="140" rx="8" class="d-fill f-auth"/>
-                  <text x="62" y="208" text-anchor="middle" class="d-small">older</text><text x="278" y="208" text-anchor="middle" class="d-small">newer</text>
-                </svg>
-              </div>
-              <h3>Newer is not stronger.</h3>
-              <p>Recency never raises or lowers a score. Bench strength and treatment do, because a smaller bench cannot overrule a larger one.</p>
-            </article>
+          <div class="segmented" id="ladder" role="radiogroup" aria-label="Signals used for ranking">
+            <button type="button" role="radio" data-config="b0" aria-checked="false">BM25 only</button>
+            <button type="button" role="radio" data-config="b1" aria-checked="false">+ Continuity</button>
+            <button type="button" role="radio" data-config="full" aria-checked="true">All four</button>
           </div>
         </div>
-      </section>
-
-      <!-- ============================================================ EVIDENCE (desire: feedback carousel) -->
-      <section class="section evidence-section" id="evidence" aria-labelledby="evidence-title">
-        <div class="container">
-          <header class="section-head" data-reveal>
-            <h2 id="evidence-title">The sentence behind the status.</h2>
-            <p id="evidence-sub">Run a search and the treatment evidence from your results appears here.</p>
-          </header>
-          <div class="carousel" id="carousel" data-reveal aria-roledescription="carousel" aria-label="Treatment evidence from the current results">
-            <div class="plates" id="plates" aria-hidden="true"></div>
-            <div class="quote-wrap">
-              <div class="quote-stage" id="quote-stage">
-                <blockquote class="quote" id="quote"><p>No evidence to show yet.</p></blockquote>
-                <p class="quote-meta" id="quote-meta"></p>
-              </div>
-              <div class="carousel-controls">
-                <button type="button" class="arrow" id="car-prev" aria-label="Previous evidence" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-                <span class="car-dots" id="car-dots" aria-hidden="true"></span>
-                <span class="car-count" id="car-count" aria-live="polite"></span>
-                <button type="button" class="arrow" id="car-next" aria-label="Next evidence" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============================================================ ACTION -->
-      <section class="section cta-section" id="cta" aria-labelledby="cta-title">
-        <div class="container cta-inner">
-          <h2 class="cta-title" id="cta-title" data-reveal>Run the search that shows its work.</h2>
-          <button type="button" class="btn btn-primary btn-xl magnetic" id="cta-btn">Start a search</button>
-        </div>
+        <div class="callout callout-warn" id="ws-stub" role="alert" hidden></div>
+        <div class="callout callout-error" id="ws-error" role="alert" hidden></div>
+        <ol class="results" id="ws-main" aria-live="polite"></ol>
+        <p class="legal-note">Treatment signals with evidence, from automated analysis of later judgments. Not legal advice: read the cited sentences and the judgments.</p>
       </section>
     </div>
 
     <!-- ================================================================ INDEX (M1) -->
     <div id="view-index" data-view="index" hidden>
-      <section class="ix-hero" aria-labelledby="ix-title">
-        <div class="container ix-hero-grid">
-          <div class="ix-hero-copy">
-            <h1 class="ix-title" id="ix-title">How a judgment becomes
-              <span class="inline-art ix-pill ix-pill-docs" aria-hidden="true"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span>
-              a searchable index
-              <span class="inline-art ix-pill ix-pill-lattice" aria-hidden="true"><svg viewBox="0 0 44 22"><path d="M3 4 L16 11 L3 18 M16 11 H41 M28 4 L41 11 L28 18" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              you can interrogate</h1>
-            <p class="ix-lede">The retrieval core of LexShift, from the source text to the ranked list. Every panel below runs against the index that is on disk, so what you see is exactly what <span class="mono">search()</span> uses.</p>
-            <div class="ix-cta-row">
-              <a class="btn btn-primary btn-xl" href="#ix-corpus" data-ix-jump="#ix-corpus">Start with the corpus</a>
-              <a class="btn btn-secondary btn-xl" href="#ix-query" data-ix-jump="#ix-query">Try a query</a>
-            </div>
+      <header class="page-head container">
+        <p class="eyebrow"><span class="mod mod-m1">M1</span> Index and relevance</p>
+        <h1>How a judgment becomes searchable.</h1>
+        <p class="lede">Process the text, index it, parse the query, score with BM25. Every panel runs on the real index.</p>
+      </header>
+      <div class="container">
+        <div class="callout callout-error" id="ix-error" role="alert" hidden></div>
+        <div class="tiles" id="ix-tiles"></div>
+        <div class="tabs" id="ix-tabs" role="tablist" aria-label="M1 pipeline stages"></div>
+
+        <section class="panel" id="ix-corpus" role="tabpanel" aria-label="Corpus" hidden>
+          <h3>Where the words sit</h3>
+          <div class="zonebar" id="ix-zonebar"></div>
+          <ul class="legend" id="ix-zone-legend"></ul>
+          <div class="table-wrap"><table class="table" id="ix-sample"><thead><tr><th>Judgment</th><th>Date</th><th>Bench</th></tr></thead><tbody></tbody></table></div>
+          <div class="checklist" data-stage="corpus"></div>
+        </section>
+
+        <section class="panel" id="ix-text" role="tabpanel" aria-label="Text processing" hidden>
+          <form class="inline-form" id="ix-text-form">
+            <label class="sr" for="ix-text-in">Text</label>
+            <input id="ix-text-in" type="text" maxlength="2000" spellcheck="false" value="Sections 302 and 120-B of the IPC, [2025] 1 S.C.R. 1. The appellants were murdered.">
+            <button class="btn" type="submit">Process</button>
+          </form>
+          <div class="tokens" id="ix-tokens" aria-live="polite"></div>
+          <ul class="legend"><li><i class="k-kept"></i>kept as written</li><li><i class="k-stem"></i>stemmed</li><li><i class="k-stop"></i>stop word, removed</li></ul>
+          <p class="note" id="ix-text-note"></p>
+          <div class="checklist" data-stage="text"></div>
+        </section>
+
+        <section class="panel" id="ix-index" role="tabpanel" aria-label="Postings" hidden>
+          <form class="inline-form" id="ix-term-form">
+            <label class="sr" for="ix-term-in">Term</label>
+            <input id="ix-term-in" type="text" value="murder" maxlength="80" autocomplete="off" spellcheck="false">
+            <button class="btn" type="submit">Show postings</button>
+          </form>
+          <div class="chips" id="ix-topterms" aria-label="Most common terms"></div>
+          <div id="ix-term-out" aria-live="polite"></div>
+          <div class="checklist" data-stage="index"></div>
+        </section>
+
+        <section class="panel" id="ix-query" role="tabpanel" aria-label="Query" hidden>
+          <div class="chips" id="ix-samples" aria-label="Example queries"></div>
+          <form class="inline-form" id="ix-q-form">
+            <label class="sr" for="ix-q-in">Query</label>
+            <input id="ix-q-in" type="text" value="murder AND intention" maxlength="300" autocomplete="off" spellcheck="false">
+            <button class="btn btn-primary" type="submit">Run</button>
+          </form>
+          <p class="note">AND, OR, NOT, brackets &middot; "a phrase" &middot; a /10 b within 10 tokens &middot; plain words</p>
+          <div class="split">
+            <div class="tree" id="ix-tree" aria-label="Parsed query"></div>
+            <div class="hits" id="ix-hits"></div>
           </div>
-          <div class="ix-art" aria-hidden="true">
-            <div class="ix-art-plate ap-1"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><i class="l5"></i></div>
-            <div class="ix-art-plate ap-2"><span>murder</span><span>intent</span><span>section</span><span>302</span><span>ipc</span></div>
-            <div class="ix-art-plate ap-3"><svg viewBox="0 0 120 80"><g class="ix-lattice"><path d="M10 14 H110 M10 40 H110 M10 66 H110"/><path d="M26 6 V74 M60 6 V74 M94 6 V74"/></g><g class="ix-dots"><circle cx="26" cy="14" r="4.5"/><circle cx="60" cy="40" r="4.5"/><circle cx="94" cy="14" r="4.5"/><circle cx="26" cy="66" r="4.5"/><circle cx="94" cy="66" r="4.5"/></g></svg></div>
+          <div class="checklist" data-stage="query"></div>
+        </section>
+
+        <section class="panel" id="ix-retrieve" role="tabpanel" aria-label="BM25" hidden>
+          <p class="note" id="ix-ret-query"></p>
+          <div class="split">
+            <div id="ix-worked"></div>
+            <div id="ix-api"></div>
           </div>
-        </div>
-      </section>
-
-      <div class="container ix-error" id="ix-error" role="alert" hidden></div>
-
-      <section class="ix-stages" aria-labelledby="ix-stages-title">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="ix-stages-title">Five stages, one pipeline</h2>
-            <p>Point at a stage to open it. Each lists what M1 built there, and marks anything in the list that the pushed code does not contain yet.</p>
+          <div class="actions">
+            <button class="btn" id="ix-verify" type="button">Check against a plain scan</button>
+            <button class="btn" id="ix-bench" type="button">Measure latency</button>
           </div>
-          <div class="ix-acc" id="ix-acc" role="list" aria-label="The five stages of M1's pipeline"></div>
-          <p class="ix-key" id="ix-key"><span class="ix-state s-live">live on this page</span><span class="ix-state s-shown">explained with real numbers</span><span class="ix-state s-missing">not in the pushed code</span></p>
-        </div>
-      </section>
-
-      <section class="ix-work">
-        <div class="container ix-work-stack">
-
-          <article class="ix-plate" id="ix-corpus" aria-labelledby="ix-h-corpus">
-            <header class="ix-plate-head"><h2 id="ix-h-corpus">The corpus</h2><p>Judgments are read into one file with their text, title, date, bench size and four zones. The index is built from that file and nothing else.</p></header>
-            <div class="ix-tiles" id="ix-corpus-tiles"></div>
-            <div class="ix-block"><h3>Where the words sit</h3><p class="ix-sub">Tokens per zone, after text processing. Zones are weighted when a document is scored.</p><div class="ix-zonebar" id="ix-zonebar"></div><ul class="ix-legend" id="ix-zone-legend"></ul></div>
-            <div class="ix-block"><h3>A few records</h3><div class="ix-scroll"><table class="ix-table" id="ix-sample"><thead><tr><th>Judgment</th><th>Date</th><th>Bench</th><th>Id</th></tr></thead><tbody></tbody></table></div></div>
-            <div class="ix-items" id="ix-items-corpus"></div>
-          </article>
-
-          <article class="ix-plate" id="ix-text" aria-labelledby="ix-h-text">
-            <header class="ix-plate-head"><h2 id="ix-h-text">Text processing</h2><p>Type any legal text. Each word is shown with what the tokenizer did to it, using M1's own code.</p></header>
-            <form class="ix-form" id="ix-text-form"><label class="ix-label" for="ix-text-in">Text</label><textarea id="ix-text-in" rows="2" maxlength="2000" spellcheck="false">Sections 302 and 120-B of the IPC, [2025] 1 S.C.R. 1 : 2025 INSC 8. The appellants were murdered, the court said.</textarea><button class="btn btn-secondary btn-small" type="submit">Process</button></form>
-            <div class="ix-tokens" id="ix-tokens" aria-live="polite"></div>
-            <ul class="ix-legend ix-legend-tok"><li><i class="k-kept"></i>kept as written: a section, a citation, a number</li><li><i class="k-stem"></i>stemmed (word becomes stem)</li><li><i class="k-stop"></i>stop word, removed</li></ul>
-            <p class="ix-note" id="ix-text-note"></p>
-            <div class="ix-items" id="ix-items-text"></div>
-          </article>
-
-          <article class="ix-plate" id="ix-index" aria-labelledby="ix-h-index">
-            <header class="ix-plate-head"><h2 id="ix-h-index">The index</h2><p>For every term: which judgments contain it, where, and in which zone. Look a term up to see its postings.</p></header>
-            <div class="ix-tiles" id="ix-index-tiles"></div>
-            <div class="ix-block">
-              <form class="ix-form ix-form-inline" id="ix-term-form"><label class="ix-label" for="ix-term-in">Look up a term</label><input id="ix-term-in" type="text" value="murder" maxlength="80" autocomplete="off" spellcheck="false"><button class="btn btn-secondary btn-small" type="submit">Show postings</button></form>
-              <div class="ix-chips" id="ix-topterms" aria-label="Most common terms"></div>
-              <div id="ix-term-out" aria-live="polite"></div>
-            </div>
-            <div class="ix-items" id="ix-items-index"></div>
-          </article>
-
-          <article class="ix-plate ix-plate-wide" id="ix-query" aria-labelledby="ix-h-query">
-            <header class="ix-plate-head"><h2 id="ix-h-query">Querying</h2><p>Five kinds of query, each parsed and run live. Page through them or type your own below.</p></header>
-            <div class="ix-car" id="ix-car">
-              <div class="ix-car-stage" id="ix-car-stage" aria-live="polite">
-                <div class="ix-car-copy"><p class="ix-car-kind" id="ix-car-kind"></p><blockquote class="ix-quote" id="ix-quote"></blockquote><div class="ix-tree" id="ix-car-tree" aria-label="Parsed query"></div></div>
-                <div class="ix-hitplates" id="ix-car-plates"></div>
-              </div>
-              <div class="ix-car-bar"><button class="ix-arrow" id="ix-car-prev" type="button" aria-label="Previous query"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ix-dots-nav" id="ix-car-dots" role="tablist"></div><button class="ix-arrow" id="ix-car-next" type="button" aria-label="Next query"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 L16 12 L9 19" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-            </div>
-            <form class="ix-form ix-form-inline" id="ix-q-form"><label class="ix-label" for="ix-q-in">Your query</label><input id="ix-q-in" type="text" value="murder AND intention" maxlength="300" autocomplete="off" spellcheck="false"><button class="btn btn-primary btn-small" type="submit">Parse and run</button></form>
-            <div class="ix-syntax"><span><b>AND OR NOT</b> and brackets</span><span><b>"two words"</b> a phrase</span><span><b>a /10 b</b> within 10 tokens</span><span><b>plain words</b> any word counts</span></div>
-            <div class="ix-tree ix-tree-main" id="ix-tree" aria-label="Parsed query"></div>
-            <div class="ix-items" id="ix-items-query"></div>
-          </article>
-
-          <article class="ix-plate" id="ix-retrieve" aria-labelledby="ix-h-retrieve">
-            <header class="ix-plate-head"><h2 id="ix-h-retrieve">Retrieval</h2><p>The same query, scored. Each result shows how much of its score came from each zone, and one BM25 calculation is worked out with the real numbers.</p></header>
-            <div class="ix-tiles" id="ix-ret-tiles"></div>
-            <div class="ix-hits" id="ix-hits"></div>
-            <div class="ix-grid-2">
-              <div class="ix-block ix-worked" id="ix-worked"></div>
-              <div class="ix-block ix-api" id="ix-api"></div>
-            </div>
-            <div class="ix-actions">
-              <button class="btn btn-secondary btn-small" id="ix-verify" type="button">Check against a plain scan</button>
-              <button class="btn btn-secondary btn-small" id="ix-bench" type="button">Measure latency</button>
-              <a class="btn btn-secondary btn-small" id="ix-open-search" href="#/">Open in Search with the full ranking</a>
-            </div>
-            <div class="ix-out" id="ix-verify-out" aria-live="polite"></div>
-            <div class="ix-out" id="ix-bench-out" aria-live="polite"></div>
-            <div class="ix-items" id="ix-items-retrieve"></div>
-          </article>
-
-        </div>
-      </section>
-
-      <section class="ix-close" aria-labelledby="ix-close-title">
-        <div class="container ix-close-inner">
-          <h2 class="ix-close-title" id="ix-close-title">This is signal one of four.</h2>
-          <p>Relevance from BM25 is the first term of the ranking function. Continuity, treatment and authority are added on top of it.</p>
-          <div class="ix-cta-row"><a class="btn btn-primary btn-xl" href="#/">Search with all four signals</a><a class="btn btn-secondary btn-xl" href="#/method">How they are combined</a></div>
-        </div>
-      </section>
+          <div id="ix-verify-out" aria-live="polite"></div>
+          <div id="ix-bench-out" aria-live="polite"></div>
+          <div class="checklist" data-stage="retrieve"></div>
+        </section>
+      </div>
     </div>
 
-    <!-- ================================================================ EVALUATION -->
-    <div id="view-evaluation" data-view="evaluation" hidden>
-      <section class="view-head">
-        <div class="container">
-          <h1 class="view-title">Evaluation</h1>
-          <p class="view-lede">What the numbers are computed from, and the numbers once they exist. Judged queries, grades and the list of known overrulings are written by people; this page only reads them.</p>
+    <!-- ================================================================ STATUTES (M2) -->
+    <div id="view-statutes" data-view="statutes" hidden>
+      <header class="page-head container">
+        <p class="eyebrow"><span class="mod mod-m2">M2</span> Statute continuity</p>
+        <h1>Which code governs, and does the old precedent still count?</h1>
+        <p class="lede">The offence date picks IPC or BNS. An older precedent keeps weight in proportion to how little its section changed.</p>
+      </header>
+      <div class="container">
+        <div class="timeline" id="st-timeline" aria-label="IPC to BNS changeover"></div>
+        <form class="searchbar searchbar-sm" id="st-form" autocomplete="off">
+          <label class="field field-query" for="st-q"><span class="field-label">Query</span><input id="st-q" type="text" maxlength="500" required spellcheck="false" value="BNS 103"></label>
+          <label class="field field-date" for="st-date"><span class="field-label">Offence date</span><input id="st-date" type="date" value="2025-01-10" min="1950-01-01" max="2099-12-31"></label>
+          <button type="submit" class="btn btn-primary">Read query</button>
+        </form>
+        <div class="chips" id="st-presets" aria-label="Example queries"></div>
+        <div class="grid-2">
+          <section class="card" aria-labelledby="st-read-h"><h3 id="st-read-h">Query read as</h3><div id="st-read"></div></section>
+          <section class="card" aria-labelledby="st-cont-h"><h3 id="st-cont-h">Continuity of the top results</h3><div id="st-cont"></div></section>
         </div>
-      </section>
-      <div class="container view-body" id="eval-body"></div>
+        <section class="card" aria-labelledby="st-map-h">
+          <h3 id="st-map-h">Old section to new section</h3>
+          <div class="chips" id="st-weights"></div>
+          <div class="table-wrap table-tall"><table class="table" id="st-map"><thead><tr><th>Old</th><th>New</th><th>Relation</th><th>Weight</th><th>Offence</th></tr></thead><tbody></tbody></table></div>
+        </section>
+      </div>
     </div>
 
-    <!-- ================================================================ JUDGING -->
+    <!-- ================================================================ TREATMENT (M3) -->
+    <div id="view-treatment" data-view="treatment" hidden>
+      <header class="page-head container">
+        <p class="eyebrow"><span class="mod mod-m3">M3</span> Treatment and authority</p>
+        <h1>What later benches did with it.</h1>
+        <p class="lede">Citations are found, resolved and classified. Negative treatment lowers health; being cited builds authority.</p>
+      </header>
+      <div class="container">
+        <div class="callout callout-error" id="tr-error" role="alert" hidden></div>
+        <div class="tiles" id="tr-tiles"></div>
+        <div class="tabs" id="tr-tabs" role="tablist" aria-label="M3 pipeline stages"></div>
+
+        <section class="panel" id="tr-extract" role="tabpanel" aria-label="Find citations" hidden>
+          <h3>Every way a judgment refers to an earlier case</h3>
+          <div class="labelbar" id="tr-kinds"></div>
+          <div id="tr-extract-body"></div>
+          <div class="checklist" data-stage="extract"></div>
+        </section>
+
+        <section class="panel" id="tr-resolve" role="tabpanel" aria-label="Resolve" hidden>
+          <h3>Which judgment in the corpus is meant</h3>
+          <div class="labelbar" id="tr-resolution"></div>
+          <div id="tr-resolve-body"></div>
+          <div class="checklist" data-stage="resolve"></div>
+        </section>
+
+        <section class="panel" id="tr-window" role="tabpanel" aria-label="Window" hidden>
+          <h3>The sentences around the citation</h3>
+          <div id="tr-window-body"></div>
+          <div class="checklist" data-stage="window"></div>
+        </section>
+
+        <section class="panel" id="tr-classify" role="tabpanel" aria-label="Classify" hidden>
+          <h3>What the later bench did with it</h3>
+          <div class="labelbar" id="tr-labels"></div>
+          <div id="tr-classify-body"></div>
+          <div class="checklist" data-stage="classify"></div>
+        </section>
+
+        <section class="panel" id="tr-scores" role="tabpanel" aria-label="Scores" hidden>
+          <div class="grid-2">
+            <div><h3>How the scores are set</h3><div id="tr-rules"></div></div>
+            <div><h3>Highest authority</h3><ol class="rank-list" id="tr-top"></ol></div>
+          </div>
+          <form class="searchbar searchbar-sm tr-form" id="tr-form" autocomplete="off">
+            <label class="field field-query" for="tr-q"><span class="field-label">Query</span><input id="tr-q" type="text" maxlength="500" required spellcheck="false" value="IPC 302"></label>
+            <label class="field field-date" for="tr-date"><span class="field-label">Offence date</span><input id="tr-date" type="date" value="2020-01-01" min="1950-01-01" max="2099-12-31"></label>
+            <button type="submit" class="btn btn-primary">Show treatment</button>
+          </form>
+          <div id="tr-results" aria-live="polite"></div>
+          <div class="checklist" data-stage="scores"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ================================================================ RANKING AND EVALUATION (M4) -->
+    <div id="view-ranking" data-view="ranking" hidden>
+      <header class="page-head container">
+        <p class="eyebrow"><span class="mod mod-m4">M4</span> Ranking and evaluation</p>
+        <h1>Four signals, one score.</h1>
+        <p class="lede">Each signal is scaled to 0 to 1, weighted and summed. Weights are tuned on dev queries only and reported on test.</p>
+      </header>
+      <div class="container" id="eval-body"></div>
+    </div>
+
+    <!-- ================================================================ JUDGING (M4, reached from Ranking) -->
     <div id="view-judging" data-view="judging" hidden>
-      <section class="view-head">
-        <div class="container">
-          <h1 class="view-title">Judging</h1>
-          <p class="view-lede">Grade the pooled documents for each query. The sheet is blind: scores, ranks and system names are never shown here, and no grade is ever suggested.</p>
-        </div>
-      </section>
-      <div class="container view-body" id="judge-body"></div>
+      <header class="page-head container">
+        <p class="eyebrow"><span class="mod mod-m4">M4</span> <a href="#/ranking">Ranking</a> / Judging</p>
+        <h1>Judging</h1>
+        <p class="lede">Grade the pooled documents for each query. The sheet is blind: no scores, ranks or system names, and no suggested grade.</p>
+      </header>
+      <div class="container" id="judge-body"></div>
     </div>
   </main>
 
-  <footer class="footer">
-    <div class="container footer-inner">
-      <div class="footer-brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" class="m1"/><circle cx="16" cy="16" r="7.5" class="m2"/><circle cx="16" cy="16" r="3" class="m3"/></svg><span>LexShift</span></div>
-      <p class="footer-note">Output is treatment signals with evidence and a confidence. It is not legal advice and never declares a judgment unusable: read the cited sentences and the judgments themselves.</p>
-      <p class="footer-meta">Runs offline on this machine. Modules: M1 index and search, M2 statute layer, M3 citations and treatment, M4 ranking, evaluation and this interface.</p>
-    </div>
+  <footer class="footer container">
+    <p>LexShift shows treatment signals with evidence and a confidence. It is not legal advice. Runs offline on this machine.</p>
   </footer>
 
   <div class="tip" id="tip" role="tooltip" hidden></div>
   <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
   <div class="scrim" id="scrim" hidden></div>
 
-  <aside class="drawer drawer-reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="reader-title" hidden>
+  <aside class="drawer" id="reader" role="dialog" aria-modal="true" aria-labelledby="reader-title" hidden>
     <header class="drawer-head">
       <div class="drawer-heading">
         <h2 id="reader-title">Judgment</h2>
@@ -460,20 +291,12 @@
     <div class="drawer-body" id="reader-body"></div>
   </aside>
 
-  <aside class="drawer drawer-status" id="status-panel" role="dialog" aria-modal="true" aria-labelledby="status-title" hidden>
+  <aside class="drawer" id="status-panel" role="dialog" aria-modal="true" aria-labelledby="status-title" hidden>
     <header class="drawer-head">
       <div class="drawer-heading"><h2 id="status-title">System status</h2><p class="drawer-meta" id="status-meta"></p></div>
       <div class="drawer-tools"><button type="button" class="icon-btn" id="status-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     </header>
     <div class="drawer-body" id="status-body"></div>
-  </aside>
-
-  <aside class="drawer drawer-keys" id="keys-panel" role="dialog" aria-modal="true" aria-labelledby="keys-title" hidden>
-    <header class="drawer-head">
-      <div class="drawer-heading"><h2 id="keys-title">Keyboard shortcuts</h2><p class="drawer-meta">Work through results without the mouse.</p></div>
-      <div class="drawer-tools"><button type="button" class="icon-btn" id="keys-close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    </header>
-    <div class="drawer-body" id="keys-body"></div>
   </aside>
 </body>
 </html>

@@ -486,7 +486,31 @@ kept outside the repo, used only to exercise the pipeline; they are not results.
   `data/llm_labels/m3_llm_labels.jsonl`. It is small (hash keys and labels, no judgment text), and with it anyone can
   rebuild `citations.jsonl` and `doc_health.jsonl` offline, without an API key, which is the frozen-output rule.
 
-### D-034 (2026-10-07) Fifth integration pass: the 468-judgment corpus, and how much corpus the evaluation needs
+### D-034 (2026-10-07) A minimal interface with one page per module, for the demo
+
+The D-028 interface (scrubbed statement, pinned split, accordion, carousel, scroll-linked motion) was too busy to present
+over. On branch `ui-refactor` it is replaced by five plain pages, one per owner: Search (all four signals, the formula
+with live weights, the BM25 / + continuity / all-four switch), Index (M1, one tab per pipeline stage, M1's 24-item list
+kept), Statutes (M2: `parse_query()` output, IPC/BNS changeover, continuity and rank change per result, the mapping table),
+Treatment (M3: corpus-wide label counts, the health and authority rules, the most cited judgments, per-result evidence) and
+Ranking (M4: weights per configuration, evaluation data and results, the judging workbench). `#/evaluation` still opens
+Ranking. Only GSAP and Flip are loaded (ScrollTrigger and ScrollToPlugin stay vendored but unused). One read-only endpoint
+was added, `/api/modules`, which returns M2's `statute_map.csv` and relation weights and counts over M3's
+`citations.jsonl` and `doc_health.jsonl`; it scores nothing. Measured on the 468-judgment corpus: 15,489 citation mentions,
+269 resolved, labels neutral 15,381 / followed 106 / distinguished 2, no negative label, so health is 1.0 for every
+judgment, and the Treatment page says so. Tests that pinned the old design were replaced by tests for the new structure.
+The Treatment page has one tab per M3 stage (find, resolve, window, classify, score), read from `m3_mentions.jsonl`,
+`citations.jsonl`, `doc_health.jsonl` and the labelling sheets (counted, never labelled), with M3's README list marked
+live (shown working) or built (in the code and tested). The page counts labels over resolved mentions only (M3 classifies only those, `llm.scope: resolved`; the 15,220
+unresolved mentions carry a default `neutral`) and shows M3's own authority, not the ranking's min-max rescaling of it.
+**Finding for M3 (not fixed here):** of the 193 resolved mentions whose raw text carries an SCR citation, 20 do not
+match the reporter citation of the judgment they were resolved to (7 of them labelled `followed`), spread over 7
+judgments. `2024_1_404_412_EN` ([2024] 1 SCR 404, M1 title "State of Haryana v. v.") received 8, all citations to other
+"... v. State of Haryana" judgments of 2023; `2024_10_393_410_EN` received 5. Both are in the top five by authority.
+The likely cause is name matching on incomplete titles; preferring a reporter-citation match when one is present
+would catch these.
+
+### D-035 (2026-10-07) Fifth integration pass: the 468-judgment corpus, and how much corpus the evaluation needs
 * **Branches.** `m1-index` (+4, the 468-judgment corpus), `m2-statute` (+1) and `m3-treatment` (+1, also on `main`) merged into `m4-rank`; `main` was not touched. Results, new findings (M1-19, M1-20,
   M2-12) and the request tracker are in docs/INTEGRATION_REVIEW.md (third update). Tests: 561 passed, 1 expected failure (M2's own tests pass again). They follow the corpus: the year filter test partitions by the years present instead of assuming 2025.
 * **`eval.feasibility --target N`** states how far the corpus is from N candidate judgments per query, which queries have none (they need specific judgments added) and, under a stated assumption (matches grow
@@ -497,13 +521,44 @@ kept outside the repo, used only to exercise the pipeline; they are not results.
   query and about 4,700 for 90% of those with a match, and still could not help the 6 queries with none.
 * **Stub switches.** `python eval/smoke.py` passes with search and statute real for the first time; the switches are the owners' to flip and stay `true`. CI now builds M2's `doc_statutes.jsonl` as well as M1's index.
 
-### D-035 (2026-10-07) The progress watcher
+### D-036 (2026-10-07) The progress watcher
 `python -m eval.progress_watch` (also `make watch`) fetches every branch, merges `m4-rank` and every lane's new commits into a **separate worktree** (`.watch/wt`, branch `integration/watch`, never pushed,
 git-ignored), rebuilds what is derived, runs the tests, the smoke gate twice, the conformance check, `eval.feasibility --target 10`, M3's extract stage and the submission audit there, and scores each lane
 from those results (the weights and the checks are in `LANES` of the script; partial credit for counts such as "27 of 35 benches right"). A merge that conflicts is aborted and reported with its files. The
 owner's working tree is never touched; `--apply` fast-forwards the checked-out `m4-rank` to the integration branch only when the tree is clean, the merge is a fast-forward, the tests did not get worse and the score did
 not drop, and it commits and pushes nothing of its own. The score is readiness for the submission, not retrieval quality; the report PDF, the video and the clean-machine test are listed but not scored. Reports
 name lanes and never people (commit authors are not read).
+
+### D-037 (2026-10-07) The corpus: 4,819 judgments, how they were chosen, and why not the whole dataset
+* **Source and size, measured.** The public bucket lists **38,147 English judgments (19.5 GB of PDF)** for 1950 to 2025 (`python -m m1_index.catalog build`, 50 MB of metadata). Downloads were measured at 0.3 to 2.5 MB/s
+  (about 2 MB/s on average over 1.5 GB), so the whole set would take 3 to 8 hours, and its text would not fit the live demo's constraints (offline, laptop CPU, the index in memory).
+* **What is in the corpus** (`m1_index/selection.py`, `data/corpus_manifest.csv` lists each judgment and why): (1) the **named cases**: both ends of every doctrine pair the judged queries are about, read off
+  `eval/examples/query_grade_criteria.example.md`, matched by title and year (every one but *Mohan Lal v. State of Punjab* (2018), which is not in the dataset); (2) a **criminal-law base**: every English judgment of
+  **2005 to 2025** whose title looks criminal (the State, the CBI, narcotics, enforcement, police, ...) is downloaded, its text read, and kept only if the text mentions IPC, BNS, CrPC, BNSS, NDPS, the Prevention of
+  Corruption Act, POCSO and the like. 7,850 judgments were read, 4,819 are in the corpus (3,031 left out as not criminal law, 11 scans without a text layer). The second tier (every other title, `fetch --tier all`) was
+  not downloaded: 5.8 GB more for 2005 to 2025, and the coverage check says the queries do not need it. This is corpus construction by title and text, never by a relevance judgment (none exists).
+* **Evidence it is enough for the evaluation** (`python -m eval.feasibility --target 10`): **26 of the 30 queries have at least 10 candidate judgments** (4 of 30 at 468 judgments), 9 of the 10 doctrines have both an overruled
+  and an overruling judgment in the corpus. Still thin: `dev06` (1 judgment contains every content word), `test07` (1), `test10` (9), `test20` (0). These are doctrine queries whose key judgments are present; the counts
+  are of judgments containing every word, not of relevant judgments.
+* **How it is shared.** The corpus (376 MB as `judgments.jsonl`) is tracked as `data/corpus/judgments.jsonl.xz` (41 MB) with its SHA-256; `python -m m1_index.ingest unpack` (`make unpack`) restores it in seconds
+  and CI does that first. The 74 MB of stale index files and the 468-judgment `judgments.jsonl` are no longer tracked. `python -m m1_index.ingest download --years 2025-2005` rebuilds it from the bucket (resumable).
+  This closes OQ-1 (how the sample is shared) and OQ-2 (which subset).
+* **Quality of what was read** (measured on the corpus): zone shares headnote 17%, facts 18%, arguments 30%, holding 35%; titles in readable case (`Navtej Singh Johar v. Union of India`); dates from the catalog (no
+  default date is ever invented: a judgment without one is skipped); bench size known for all but a handful of judgments, parsed from the coram line with OCR repairs (a missing bracket, `ANDLOKESHWAR`, `&`, a closing `J`);
+  213 judgments are from the supplementary SCR volumes and have ids with an `S_` prefix.
+* **Honest limits.** One judgment the bucket lists answers 404 (`2009_9_810_820_EN`). M3 resolves 16% of citations to a corpus judgment (the rest are High Court, foreign or pre-2005 decisions). The zone split is a heuristic.
+
+### D-038 (2026-10-07) M2: bare sections, offence ids from the map, the sedition row; M3: a cued labelling scope
+* **M2.** The extractor now reads every form the Build Guide lists (9 of 9; `I.P.C.` and `Cr.P.C.` failed because `\b` cannot follow a full stop) and gives a bare `Section N` an act from the same judgment (its code family from the
+  statute map, then the nearest explicit mention of that family), never from the calendar; sections of other statutes ("Section 37 of the NDPS Act") are dropped. UNKNOWN fell from 68% to 37% of mentions. In queries a bare number takes
+  its code from the offence date. Offence ids come from the map's notes, so one offence has one id in both codes (12,438 references carry one, it was 1,402). **The sedition row was wrong and was corrected**: IPC 124A to BNS 152
+  was `equivalent` 1.0, but the PRS legislative brief on the Bharatiya Nyaya (Second) Sanhita says sedition is removed and clause 152 "may have retained aspects" of it, so it is `modified_elements` 0.5. The other 35 rows are
+  still unverified here (they cite only "MHA") and need a person with the official comparison tables.
+* **M3.** Only `doubted` and `overruled` can lower a score, and a judgment that does either says so in words near the citation. The new labelling scope `cued` (now the default) sends the LLM only resolved windows with such a word
+  (1,010 of 25,475, about 34 requests and 0.2 million input tokens, instead of 845 requests), the rest are `neutral` with confidence 0 ("not classified"), which cannot move a score and keeps their edge in PageRank. The price is
+  recall: a treatment stated without any cue word is not looked at; it is a stated limitation. `citations build` still refuses to run until every in-scope window has a cached label, and **no label exists yet for the new
+  corpus because the run needs a Gemini API key** (`.env`, see `.env.example`; `python -m m3_treatment.pipeline label-llm`, resumable). Until it is run `stubs.health` and `stubs.authority` stay `true`.
+
 
 ## Open questions
 

@@ -39,6 +39,7 @@ export const api = {
   examples: () => request("/api/examples"),
   corpus: (n) => request(`/api/corpus${query({ n })}`),
   evaluation: () => request("/api/evaluation"),
+  modules: () => request("/api/modules"),
   m1Overview: () => request("/api/m1/overview"),
   m1Analyze: (text) => request(`/api/m1/analyze${query({ text })}`),
   m1Term: (t) => request(`/api/m1/term${query({ t })}`),

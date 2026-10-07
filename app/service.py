@@ -232,6 +232,152 @@ class Service:
     def m1_bench(self) -> dict[str, Any]:
         return self._explore(lambda x: x.bench())
 
+    # -- the Statutes (M2) and Treatment (M3) pages ------------------------------------------------------
+    def modules(self) -> dict[str, Any]:
+        """M2's mapping table and settings, and counts over M3's citations.jsonl and doc_health.jsonl, as they are on disk.
+
+        Read and counted only: nothing here scores a document. The M3 counts are cached until either file changes.
+        """
+        cfg = load_config()
+        m2cfg = cfg.get("m2_statute") or {}
+        map_path = resolve_path("statute_map", cfg)
+        keep = ("old_act", "old_section", "new_act", "new_section", "relation", "weight", "note")
+        rows = read_table(map_path) if map_path.exists() else []
+        m3cfg = cfg.get("m3_treatment") or {}
+        return {
+            "m2": {
+                "available": map_path.exists(),
+                "commencement": m2cfg.get("bns_commencement"),
+                "relation_weights": m2cfg.get("relation_weights") or {},
+                "map": [{k: _clean(r.get(k)) for k in keep} for r in rows],
+            },
+            "m3": {
+                **self._m3_counts({
+                    "citations": resolve_path("citations", cfg), "doc_health": resolve_path("doc_health", cfg),
+                    "mentions": ROOT / str(m3cfg.get("mentions") or "data/processed/m3_mentions.jsonl"),
+                    "judgments": resolve_path("judgments", cfg), "gold": resolve_path("treatment_gold", cfg),
+                    "labelling": ROOT / str(m3cfg.get("labelling_dir") or "data/labelling"),
+                    "f1": ROOT / str(m3cfg.get("reports_dir") or "m3_treatment/reports") / "classifier_f1.md",
+                }),
+                "health_values": m3cfg.get("health_values") or {},
+                "min_confidence": m3cfg.get("min_confidence"),
+                "damping": (m3cfg.get("pagerank") or {}).get("damping"),
+                "label_source": m3cfg.get("labels"),
+                "model": (m3cfg.get("llm") or {}).get("model"),
+                "window": m3cfg.get("window") or {},
+            },
+        }
+
+    def _m3_counts(self, paths: dict[str, Path]) -> dict[str, Any]:
+        """Counts over M3's files for each pipeline stage, cached until any of them changes."""
+        def stamp(p: Path) -> tuple:
+            if p.is_dir():
+                return (str(p),) + tuple((f.name, f.stat().st_mtime_ns) for f in sorted(p.glob("*.csv")))
+            return (str(p), p.stat().st_size, p.stat().st_mtime_ns) if p.exists() else (str(p),)
+
+        key = tuple(stamp(p) for p in paths.values())
+        cached = getattr(self, "_m3_cache", None)
+        if cached and cached[0] == key:
+            return cached[1]
+        citations, doc_health = paths["citations"], paths["doc_health"]
+        labels: Counter[str] = Counter()  # over resolved mentions only: M3 classifies only those (llm.scope: resolved)
+        confidence: Counter[str] = Counter()
+        mentions = resolved = appeal = 0
+        unresolved_years: Counter[str] = Counter()  # why resolution is low: the year in each unresolved citation
+        citing: set[str] = set()
+        example = None
+        if citations.exists():
+            for rec in read_jsonl(citations):
+                mentions += 1
+                citing.add(rec.get("citing_doc"))
+                appeal += bool(rec.get("is_appeal_history"))
+                if rec.get("cited_doc") is None:
+                    years = [int(y) for y in re.findall(r"(?<!\d)(19\d\d|20\d\d)(?!\d)", str(rec.get("cited_raw") or ""))]
+                    unresolved_years["no year" if not years else "before 2024" if min(years) < 2024 else "2024 or later"] += 1
+                    continue
+                resolved += 1
+                labels[str(rec.get("label") or "unlabelled")] += 1
+                conf = rec.get("confidence")
+                if isinstance(conf, (int, float)):
+                    confidence["1.0" if conf >= 0.995 else "0.9 to 0.99" if conf >= 0.9 else "0.5 to 0.89" if conf >= 0.5 else "below 0.5"] += 1
+                window = str(rec.get("window") or "")
+                # one real example for the page: the most confident short "followed" window that is not a headnote list
+                if rec.get("label") == "followed" and len(window) < 420 and "Case Law Cited" not in window and "[[" in window:
+                    cand = (-(conf or 0), len(window))
+                    if example is None or cand < example[0]:
+                        example = (cand, rec)
+        stages = self._m3_mentions(paths["mentions"], paths["judgments"])
+        health = list(read_jsonl(doc_health)) if doc_health.exists() else []
+        meta = self.docs().all_meta() if self.docs().exists else {}
+        top = sorted((r for r in health if isinstance(r.get("authority"), (int, float))), key=lambda r: -r["authority"])[:5]
+
+        def title(doc_id: Any) -> str | None:
+            return _clean((meta.get(doc_id) or {}).get("title")) or None
+
+        sheets = []
+        if paths["labelling"].is_dir():
+            for sheet in sorted(paths["labelling"].glob("m3_*.csv")):
+                rows = read_table(sheet)
+                sheets.append({"file": sheet.name, "rows": len(rows), "labelled": sum(1 for r in rows if (r.get("gold_label") or "").strip())})
+        out = {
+            "citations_available": citations.exists(),
+            "mentions": mentions,
+            "citing_judgments": len(citing),
+            "resolved": resolved,
+            "appeal_history": appeal,
+            "unresolved_years": dict(unresolved_years),
+            "labels": dict(labels.most_common()),
+            "confidence": dict(confidence),
+            "stages": stages,
+            "gold": {
+                "sheets": sheets,
+                "gold_rows": len(read_table(paths["gold"])) if paths["gold"].exists() else 0,
+                "f1_report": paths["f1"].exists(),
+            },
+            "example": None if example is None else {
+                **{k: example[1].get(k) for k in ("citing_doc", "cited_doc", "label", "confidence", "citing_bench", "cited_bench")},
+                "window": _clean(example[1].get("window")),
+                "citing_title": title(example[1].get("citing_doc")), "cited_title": title(example[1].get("cited_doc")),
+            },
+            "health_available": doc_health.exists(),
+            "judgments": len(health),
+            "lowered": sum(1 for r in health if isinstance(r.get("health"), (int, float)) and r["health"] < 1),
+            "with_evidence": sum(1 for r in health if r.get("evidence")),
+            "top_authority": [{"doc_id": r["doc_id"], "title": title(r["doc_id"]), "authority": r["authority"]} for r in top],
+        }
+        self._m3_cache = (key, out)
+        return out
+
+    @staticmethod
+    def _m3_mentions(mentions: Path, judgments: Path) -> dict[str, Any] | None:
+        """What extraction and resolution did, from M3's intermediate m3_mentions.jsonl, and a spot check of the resolver:
+        a resolved mention whose raw text carries an SCR citation should point to the judgment with that SCR citation."""
+        if not mentions.exists():
+            return None
+        scr = re.compile(r"\[(\d{4})\]\s*(?:Supp\.?\s*)?(\d+)\s*S\.?\s*C\.?\s*R\.?\s*(\d+)", re.I)
+        reporter: dict[str, set] = {}
+        if judgments.exists():
+            for rec in read_jsonl(judgments):
+                reporter[rec.get("doc_id")] = {m for c in rec.get("reporter_citations") or [] for m in scr.findall(str(c))}
+        kinds: Counter[str] = Counter()
+        resolution: Counter[str] = Counter()
+        check: dict[str, Counter[str]] = defaultdict(Counter)
+        total = own = headnote = 0
+        for rec in read_jsonl(mentions):
+            total += 1
+            kinds[str(rec.get("kind"))] += 1
+            if rec.get("is_self"):
+                own += 1
+                continue
+            headnote += bool(rec.get("in_headnote"))
+            method = str(rec.get("resolution") or "none") if rec.get("cited_doc") else "none"
+            resolution[method] += 1
+            if method != "none" and reporter:
+                found = set(scr.findall(str(rec.get("cited_raw") or "")))
+                check[method]["unchecked" if not found else "match" if found & reporter.get(rec["cited_doc"], set()) else "mismatch"] += 1
+        return {"total": total, "self": own, "in_headnote": headnote, "kinds": dict(kinds.most_common()),
+                "resolution": dict(resolution.most_common()), "check": {m: dict(c) for m, c in check.items()}}
+
     # -- plumbing ----------------------------------------------------------------------------------
     def providers(self) -> Providers:
         with self._lock:

@@ -24,7 +24,7 @@ index over it is 52.7 MB on disk and 125 MB in memory, builds in about 140 s and
 ## The corpus
 
 The dataset is 38,147 English judgments (19.5 GB of PDF). It is not all loaded, and the reason is measured, not assumed: the live demo is offline on a laptop and keeps the index in memory, and
-a grader's judgments of "is this good law" only mean something for the criminal-law part of the Court's work that the 30 queries are about. The rules (in `selection.py`, recorded in DECISIONS.md D-036):
+a grader's judgments of "is this good law" only mean something for the criminal-law part of the Court's work that the 30 queries are about. The rules (in `selection.py`, recorded in DECISIONS.md D-037):
 
 1. **Named cases.** Both ends of every doctrine pair the judged queries are about (an overruled case and the judgment that overruled it, read off `eval/examples/query_grade_criteria.example.md`), by title and year.
    Every named case but one is in the corpus; *Mohan Lal v. State of Punjab* (2018) is not in the dataset at all.

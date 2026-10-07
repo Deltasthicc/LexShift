@@ -307,6 +307,51 @@ def test_the_workbench_never_offers_a_grade():
     assert "suggest" not in source.split("def judge_rounds")[1].lower()
 
 
+def test_the_module_pages_read_m2s_map_and_count_m3s_files(tmp_path, write_config, monkeypatch):
+    (tmp_path / "map.csv").write_text("old_act,old_section,new_act,new_section,relation,weight,source,note\n"
+                                      "IPC,302,BNS,103,equivalent,1.0,MHA,Murder\n", encoding="utf-8")
+    (tmp_path / "citations.jsonl").write_text("\n".join(json.dumps(r) for r in (
+        {"citing_doc": "B", "cited_doc": "A", "label": "followed", "confidence": 1.0, "window": "Relied on [[A v. State]] here."},
+        {"citing_doc": "C", "cited_doc": "A", "label": "overruled", "confidence": 0.9, "window": "[[A]] is overruled."},
+        {"citing_doc": "C", "cited_doc": None, "label": "neutral", "cited_raw": "X v. Y (1999) 2 SCC 1", "is_appeal_history": True},
+    )) + "\n", encoding="utf-8")
+    (tmp_path / "mentions.jsonl").write_text("\n".join(json.dumps(r) for r in (
+        {"kind": "cite", "is_self": True, "cited_doc": "B", "resolution": "cite", "cited_raw": "[2024] 1 SCR 5"},
+        {"kind": "full", "is_self": False, "cited_doc": "A", "resolution": "cite", "cited_raw": "A v. State [2024] 1 SCR 9", "in_headnote": True},
+        {"kind": "name", "is_self": False, "cited_doc": "A", "resolution": "name", "cited_raw": "Z v. State [2023] 4 SCR 7"},
+        {"kind": "supra", "is_self": False, "cited_doc": None, "resolution": "none", "cited_raw": "Y (supra)"},
+    )) + "\n", encoding="utf-8")
+    (tmp_path / "judgments.jsonl").write_text(json.dumps({"doc_id": "A", "reporter_citations": ["[2024] 1 S.C.R. 9"]}) + "\n", encoding="utf-8")
+    (tmp_path / "labelling").mkdir()
+    (tmp_path / "labelling" / "m3_L1.csv").write_text("window_id,window,gold_label,labeller\n1,w,followed,me\n2,w,,\n", encoding="utf-8")
+    (tmp_path / "health.jsonl").write_text("\n".join(json.dumps(r) for r in (
+        {"doc_id": "A", "health": 0.1, "authority": 0.9, "evidence": [{"citing_doc": "C", "label": "overruled"}]},
+        {"doc_id": "B", "health": 1.0, "authority": 0.2, "evidence": []},
+    )) + "\n", encoding="utf-8")
+    cfg = write_config(tmp_path / "config.yaml", {"paths": {
+        "statute_map": str(tmp_path / "map.csv"), "citations": str(tmp_path / "citations.jsonl"),
+        "doc_health": str(tmp_path / "health.jsonl"), "judgments": str(tmp_path / "judgments.jsonl"),
+        "treatment_gold": str(tmp_path / "gold.csv")},
+        "m3_treatment": {"mentions": str(tmp_path / "mentions.jsonl"), "labelling_dir": str(tmp_path / "labelling"),
+                         "reports_dir": str(tmp_path / "reports")}})
+    monkeypatch.setenv("LEXSHIFT_CONFIG", str(cfg))
+    out = Service().modules()
+    assert out["m2"]["available"] and out["m2"]["map"] == [{"old_act": "IPC", "old_section": "302", "new_act": "BNS", "new_section": "103",
+                                                           "relation": "equivalent", "weight": "1.0", "note": "Murder"}]
+    assert out["m2"]["relation_weights"]["equivalent"] == 1.0
+    m3 = out["m3"]
+    assert (m3["mentions"], m3["resolved"], m3["labels"]) == (3, 2, {"followed": 1, "overruled": 1}), "labels count resolved mentions only"
+    assert (m3["judgments"], m3["lowered"], m3["with_evidence"]) == (2, 1, 1)
+    assert [r["doc_id"] for r in m3["top_authority"]] == ["A", "B"] and m3["health_values"]["overruled"] == 0.1
+    assert (m3["appeal_history"], m3["unresolved_years"], m3["citing_judgments"]) == (1, {"before 2024": 1}, 2)
+    stages = m3["stages"]
+    assert (stages["total"], stages["self"], stages["in_headnote"]) == (4, 1, 1)
+    assert stages["resolution"] == {"cite": 1, "name": 1, "none": 1}
+    assert stages["check"] == {"cite": {"match": 1}, "name": {"mismatch": 1}}, "a name match to the wrong SCR citation is caught"
+    assert m3["gold"] == {"sheets": [{"file": "m3_L1.csv", "rows": 2, "labelled": 1}], "gold_rows": 0, "f1_report": False}
+    assert m3["example"]["window"] == "Relied on [[A v. State]] here." and m3["example"]["label"] == "followed"
+
+
 # ----------------------------------------------------------------------------------------------- HTTP layer
 def test_the_page_and_its_assets_are_served(live):
     status, resp, raw = live.request("GET", "/")
@@ -451,7 +496,7 @@ def test_the_vendored_scripts_do_not_touch_the_network():
 
 def test_the_page_loads_gsap_before_its_own_code_and_declares_the_font():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    assert html.index("gsap.min.js") < html.index("ScrollTrigger.min.js") < html.index("ScrollToPlugin.min.js") < html.index("Flip.min.js") < html.index("/static/js/main.js")
+    assert html.index("gsap.min.js") < html.index("Flip.min.js") < html.index("/static/js/main.js")
     css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
     assert css.count("@font-face") == 4 and "/static/fonts/geist-latin-wght-normal.woff2" in css and "/static/fonts/outfit-latin-wght-normal.woff2" in css
     assert "font-src 'self'" in __import__("app.server", fromlist=["CSP"]).CSP
@@ -475,20 +520,22 @@ def test_nothing_is_dimmed_with_a_brightness_filter():
         assert "brightness(" not in path.read_text(encoding="utf-8"), f"{path.name} dims with a brightness filter"
 
 
-def test_scroll_linked_motion_is_always_smoothed():
-    source = (WEB / "static" / "js" / "motion.js").read_text(encoding="utf-8")
-    assert "scrub: true" not in source, "an unsmoothed scrub steps with every wheel notch; give it a number"
-    assert source.count("scrub:") >= 6
-
-
-def test_the_hero_is_hidden_from_first_paint_with_a_failsafe_and_no_section_clips_its_art():
+def test_the_page_has_no_scroll_linked_motion():
+    """The interface was simplified for the demo: no scroll-driven effects, only short fades and the Flip re-ordering of results."""
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
-    assert 'data-intro="pending"' in html
-    assert 'html[data-intro="pending"]' in css and "intro-failsafe" in css, "the intro must not flash, and must show itself even if the script never runs"
-    hero_rule = re.search(r"\.hero \{[^}]*\}", css).group(0)
-    assert "overflow" not in hero_rule, "a hero that clips its own art makes a hard edge"
-    assert 'id="progress"' in html and "ambient" in html, "one fixed background and a progress line"
+    source = (WEB / "static" / "js" / "motion.js").read_text(encoding="utf-8")
+    assert "ScrollTrigger" not in html and "ScrollTrigger" not in source and "scrub" not in source
+    assert "export function flipSwap" in source
+
+
+def test_every_module_has_its_own_page():
+    """One page per owner, so each of M1 to M4 has a screen to present: Index, Statutes, Treatment, Ranking."""
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    main = (WEB / "static" / "js" / "main.js").read_text(encoding="utf-8")
+    for view, module in (("index", "m1"), ("statutes", "m2"), ("treatment", "m3"), ("ranking", "m4")):
+        assert f'id="view-{view}"' in html and f'href="#/{view}" data-route="{view}"' in html and f"mod-{module}" in html, view
+        assert f'"/{view}"' in main, view
+    assert '"/evaluation": "ranking"' in main, "old links to the evaluation view still open it"
 
 
 def test_the_page_has_no_remaining_reveal_class_that_hides_content_by_css():
@@ -516,7 +563,7 @@ def test_the_index_page_is_wired_into_the_page_the_nav_and_the_router():
     main = (WEB / "static" / "js" / "main.js").read_text(encoding="utf-8")
     assert 'id="view-index"' in html and 'href="#/index"' in html and 'data-route="index"' in html
     assert "renderIndexPage" in main and '"/index"' in main
-    for anchor in ("ix-acc", "ix-corpus", "ix-text", "ix-index", "ix-query", "ix-retrieve", "ix-car", "ix-verify", "ix-bench"):
+    for anchor in ("ix-tabs", "ix-corpus", "ix-text", "ix-index", "ix-query", "ix-retrieve", "ix-verify", "ix-bench"):
         assert f'id="{anchor}"' in html, anchor
 
 
@@ -547,14 +594,13 @@ def test_the_nav_links_work_when_the_hash_does_not_change():
     assert "function wireNavLinks" in main and "wireNavLinks();" in main
     assert 'href !== (window.location.hash || "#/")' in main, "a click on the current hash must be handled by the click itself"
     assert 'scrollToTarget("#top"' in main, "Search scrolls to the top of the page when the view is already the search view"
-    assert 'scrollToTarget("#method"' in main
 
 
 def test_every_nav_link_has_a_route_and_the_status_button_a_name_at_every_width():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     css = (WEB / "static" / "css" / "styles.css").read_text(encoding="utf-8")
     routes = re.findall(r'<a href="#/([a-z]*)" data-route="([a-z]+)"', html)
-    assert [r for _, r in routes] == ["search", "method", "evaluation", "judging", "index"]
+    assert [r for _, r in routes] == ["search", "index", "statutes", "treatment", "ranking"]
     assert 'id="status-btn"' in html and 'aria-label="Show which modules are real' in html, "its text is hidden on narrow screens, so it needs its own name"
     assert re.search(r"@media \(max-width: 900px\) \{\s*\.status-btn #status-label \{ display: none; \}", css), "five links plus the status text overflow below 900px"
 

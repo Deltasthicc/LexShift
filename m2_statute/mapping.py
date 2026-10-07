@@ -23,6 +23,7 @@ from common.schema import STATUTE_MAP_COLUMNS, SchemaError, StatuteMapRow
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+@lru_cache(maxsize=None)
 def base_section(section: str) -> str:
     """'3(5)' -> '3', '438(1)' -> '438', '120-B' -> '120B': a section without its sub-clauses (the map lists whole sections)."""
     return re.sub(r"\(.*$", "", re.sub(r"[^A-Z0-9()]", "", section.upper()))
@@ -52,17 +53,27 @@ def load_map(path: str | None = None) -> tuple[StatuteMapRow, ...]:
     return tuple(rows)
 
 
+_INDEX: tuple[tuple[StatuteMapRow, ...], dict[tuple[tuple[str, str], tuple[str, str]], StatuteMapRow]] | None = None
+
+
+def _pair_index(rows: tuple[StatuteMapRow, ...]) -> dict[tuple[tuple[str, str], tuple[str, str]], StatuteMapRow]:
+    """(provision, provision) -> the highest-weight row linking them, in both directions; built once per rows tuple (a lookup is O(1), a scan of the map was not)."""
+    global _INDEX
+    if _INDEX is None or _INDEX[0] is not rows:
+        index: dict[tuple[tuple[str, str], tuple[str, str]], StatuteMapRow] = {}
+        for r in rows:
+            old = (r.old_act, base_section(r.old_section))
+            new = (r.new_act, base_section(r.new_section))
+            for key in ((old, new), (new, old)):
+                if key not in index or r.weight > index[key].weight:
+                    index[key] = r
+        _INDEX = (rows, index)
+    return _INDEX[1]
+
+
 def relation_between(
     act_a: str, sec_a: str, act_b: str, sec_b: str, rows: tuple[StatuteMapRow, ...] | None = None
 ) -> StatuteMapRow | None:
-    """Best (highest-weight) map row linking provision A and provision B, in either direction."""
+    """Best (highest-weight) map row linking provision A and provision B, in either direction (sub-clauses ignored)."""
     rows = load_map() if rows is None else rows
-    a = (act_a, base_section(sec_a))
-    b = (act_b, base_section(sec_b))
-    best: StatuteMapRow | None = None
-    for r in rows:
-        old = (r.old_act, base_section(r.old_section))
-        new = (r.new_act, base_section(r.new_section))
-        if (old, new) in ((a, b), (b, a)) and (best is None or r.weight > best.weight):
-            best = r
-    return best
+    return _pair_index(rows).get(((act_a, base_section(sec_a)), (act_b, base_section(sec_b))))

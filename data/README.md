@@ -32,7 +32,7 @@ no AWS account needed (`aws s3 ls --no-sign-request s3://indian-supreme-court-ju
 bi-monthly; judgments from 1950 to 2025; raw JSON metadata, structured parquet metadata and judgments as zip files, in
 English and regional Indian languages.
 
-**Verified by M1 (2026-10-07), recorded in DECISIONS.md D-036:** the bucket is read over plain HTTPS without AWS tooling. Per year there is `metadata/parquet/year=Y/metadata.parquet` (title, petitioner,
+**Verified by M1 (2026-10-07), recorded in DECISIONS.md D-037:** the bucket is read over plain HTTPS without AWS tooling. Per year there is `metadata/parquet/year=Y/metadata.parquet` (title, petitioner,
 respondent, judge, citation, case id, decision date, disposal nature, path) and the judgments are PDFs at `data/pdf/year=Y/english/<path>_EN.pdf` (a `S_` prefix on the path marks the supplementary SCR volumes).
 The English set is **38,147 judgments, 19.5 GB** (the catalog lists 38,152, five have no English PDF). The corpus holds the criminal-law part of 2005 to 2025 plus the named doctrine cases (4,819 judgments); the
 selection rules are in `m1_index/selection.py`.

@@ -1,15 +1,19 @@
-// Entry point: theme, the router between the three views, and wiring the sections together.
+// Entry point: theme, the router between the views (one per module, plus search and judging), and wiring the pages together.
 import { $, $$, show, store } from "./dom.js";
-import { initMotion, scrollToTarget, setNavActive, swapView, watchSections, requestFrame } from "./motion.js";
-import { initAccordion, initCarousel } from "./sections.js";
-import { applyParams, focusQuery, initSearch, paramsDiffer } from "./search.js";
+import { scrollToTarget, setNavActive, swapView } from "./motion.js";
+import { applyParams, initSearch, paramsDiffer, renderFormula } from "./search.js";
 import { initStatus } from "./status.js";
 import { renderEvaluation } from "./evaluation.js";
 import { renderJudging } from "./judging.js";
 import { renderIndexPage } from "./m1.js";
+import { renderStatutesPage } from "./statutes.js";
+import { renderTreatmentPage } from "./treatment.js";
 import { initTooltips } from "./ui.js";
 
 const THEME_KEY = "lexshift.theme";
+const ROUTES = { "/": "search", "/index": "index", "/statutes": "statutes", "/treatment": "treatment", "/ranking": "ranking", "/evaluation": "ranking", "/judging": "judging" };
+const TITLES = { index: "Index (M1)", statutes: "Statutes (M2)", treatment: "Treatment (M3)", ranking: "Ranking (M4)", judging: "Judging" };
+const RENDER = { index: renderIndexPage, statutes: renderStatutesPage, treatment: renderTreatmentPage, ranking: renderEvaluation, judging: renderJudging };
 let current = null;
 let searchBooted = false;
 
@@ -18,12 +22,10 @@ function initTheme() {
   if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
   $("#theme-btn").addEventListener("click", () => {
     const root = document.documentElement;
-    const active = root.dataset.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    const active = root.dataset.theme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const next = active === "light" ? "dark" : "light";
-    root.classList.add("theme-anim"); // colours cross-fade for a moment instead of snapping
     root.dataset.theme = next;
     store.set(THEME_KEY, next);
-    window.setTimeout(() => root.classList.remove("theme-anim"), 700);
   });
 }
 
@@ -33,59 +35,37 @@ function parseHash() {
   return { path: path || "/", params: new URLSearchParams(query) };
 }
 
-async function doRoute() {
+async function route() {
   const { path, params } = parseHash();
-  const view = path === "/evaluation" ? "evaluation" : path === "/judging" ? "judging" : path === "/index" ? "index" : "search";
+  const view = ROUTES[path] || "search";
   const changed = view !== current;
   if (changed) {
     const from = current ? $(`[data-view="${current}"]`) : null;
     const to = $(`[data-view="${view}"]`);
     current = view;
-    document.title = view === "search" ? "LexShift" : `${{ evaluation: "Evaluation", judging: "Judging", index: "Index" }[view]} | LexShift`;
-    setNavActive(path === "/method" ? "method" : view, Boolean(from));
-    if (!from) { $$("[data-view]").forEach((el) => show(el, el === to)); }
-    else await swapView(from, to);
-    watchSections(view === "search");
-  } else {
-    setNavActive(path === "/method" ? "method" : view);
+    document.title = view === "search" ? "LexShift" : `${TITLES[view]} | LexShift`;
+    setNavActive(view === "judging" ? "ranking" : view);
+    if (!from) $$("[data-view]").forEach((el) => show(el, el === to));
+    else swapView(from, to);
   }
-  if (view === "evaluation") { if (changed) await renderEvaluation(); }
-  else if (view === "judging") { if (changed) await renderJudging(); }
-  else if (view === "index") { if (changed) await renderIndexPage(); }
-  else {
-    if (path === "/method") scrollToTarget("#method", { offset: 70 });
-    else if (!changed && searchBooted && !params.get("q")) scrollToTarget("#top", { offset: 0, duration: 0.9 }); // Search, pressed from further down the page
-    if (!searchBooted) { searchBooted = true; applyParams(params); }
-    else if (paramsDiffer(params)) applyParams(params, { scroll: true });
+  if (view !== "search") {
+    // the module pages pick up the latest search query each time they are opened; the Ranking and Judging pages reload on entry
+    if (changed || view === "statutes" || view === "treatment") await RENDER[view]();
+    return;
   }
-  requestFrame();
+  if (!searchBooted) { searchBooted = true; applyParams(params); }
+  else if (paramsDiffer(params)) applyParams(params, { scroll: true });
 }
 
-// Route changes are serialised: a second click while a view is still fading waits for it, then goes to the latest hash, so two
-// transitions can never run over each other.
-let routing = false;
-let again = false;
-async function route() {
-  if (routing) { again = true; return; }
-  routing = true;
-  try {
-    do { again = false; await doRoute(); } while (again);
-  } finally {
-    routing = false;
-  }
-}
-
-// A link to the hash we are already on fires no hashchange, so it would do nothing at all: scroll to where it points instead
-// (Method to the method section, anything else to the top of the page).
+// A link to the hash we are already on fires no hashchange, so it would do nothing at all: scroll to the top of that view instead.
 function wireNavLinks() {
   $$("a.brand, .nav-links a[data-route]").forEach((a) => {
     a.addEventListener("click", (e) => {
       const href = a.getAttribute("href");
       if (href !== (window.location.hash || "#/")) return; // a different hash: the router handles it
       e.preventDefault();
-      if (current === "search" && href === "#/method") scrollToTarget("#method", { offset: 70 });
-      else if (current === "search") scrollToTarget("#top", { offset: 0, duration: 0.9 });
-      else scrollToTarget($(`[data-view="${current}"]`), { offset: 0, duration: 0.8 });
+      if (current === "search") scrollToTarget("#top", { offset: 0 });
+      else scrollToTarget($(`[data-view="${current}"]`), { offset: 0 });
     });
   });
 }
@@ -93,20 +73,12 @@ function wireNavLinks() {
 async function boot() {
   initTheme();
   initTooltips();
-  initMotion();
   initSearch();
-  initAccordion();
-  initCarousel();
-  $("#cta-btn").addEventListener("click", () => {
-    if (current !== "search") window.location.hash = "#/";
-    window.setTimeout(focusQuery, current !== "search" ? 700 : 0);
-  });
-  $("#scroll-cue").addEventListener("click", () => scrollToTarget("#method", { offset: 70 }));
   wireNavLinks();
   window.addEventListener("hashchange", route);
   const status = await initStatus();
+  renderFormula(status);
   await route();
-  return status;
 }
 
 boot();
