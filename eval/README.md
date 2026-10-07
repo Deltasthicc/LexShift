@@ -2,6 +2,21 @@
 
 Everything needed to measure whether adding statutory continuity and judicial treatment improves ranking over plain BM25.
 
+**Writing the queries and the grades by hand: read [JUDGING_GUIDE.md](JUDGING_GUIDE.md)** (example queries, the grading rules with
+worked examples, and the step-by-step commands).
+
+| Tool | What it does |
+|---|---|
+| `python -m eval.pool` | pools the top-20 of every system into a blind judge sheet (`eval/judging/<round>/`) |
+| `python -m eval.make_qrels` | reconciles the two judges, reports kappa, lists disagreements, writes `qrels.tsv` |
+| `python -m eval.check_data` | checks queries, qrels and the gold list against the plan |
+| `python -m eval.feasibility` | counts what the corpus holds for each query (coverage only, never a grade) |
+| `python -m app.server` | the web interface; its **Judging** screen is the blind two-judge workbench that writes `judge1.csv` and `judge2.csv` |
+| `python -m eval.run_ablation` | tunes on dev, evaluates, writes the table, per-query CSV and chart |
+| `python eval/smoke.py` | contract and end-to-end check (the merge gate) |
+| `python -m eval.submission_check` | audits the submission checklist: stubs, queries, qrels, results, wording, secrets, size, documents (`--run` adds the tests and the demo) |
+| `python -m eval.figures` | draws the pipeline diagram for the report (`docs/figures/pipeline.png` and `.svg`) |
+
 ## Systems compared
 
 | Name | Signals | Meaning |
@@ -24,7 +39,8 @@ law materially changed or the precedent was criticised; **0** irrelevant, or ove
 are not listed for a query count as 0 (the pooling assumption).
 
 **Pooling.** Judge the union of the top-20 of every system, with two judges. Do not derive the grades from the mapping or
-the classifier the system uses (circularity): read the judgments.
+the classifier the system uses (circularity): read the judgments. `eval.pool` writes the sheet blind (shuffled, no scores, no
+ranks, no system names) and is incremental, so a later round only asks about documents that are not graded yet.
 
 `gold_overrulings.csv`: hand-verified overrulings, used **only** to compute `harmful@k`. Columns: `overruled_doc_id`,
 `overruling_doc_id`, `point`, `source`, `verified_by`. Verify each row against the judgments before using it.

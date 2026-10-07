@@ -30,6 +30,7 @@ from common import contracts  # noqa: E402
 from common.config import load_config, resolve_path  # noqa: E402
 from common.io import read_delimited, read_jsonl  # noqa: E402
 from common.providers import Providers, load_providers  # noqa: E402
+from m4_rank.rank import ArtefactError, load_checked  # noqa: E402
 from common.schema import (  # noqa: E402
     DocHealth,
     DocStatutes,
@@ -206,7 +207,12 @@ def main(argv: list[str] | None = None) -> int:
 
     rep = Report()
     cfg = load_config()
-    providers = load_providers(cfg)
+    try:
+        providers = load_checked(load_providers, cfg)
+    except ArtefactError as exc:
+        rep.failed("providers could not be loaded", [str(exc)])
+        print(f"\n{rep.failures} failed, {rep.skips} skipped")
+        return 1
     rep.note(f"providers: {providers.describe()}")
     if providers.stubbed:
         rep.note("STUB MODE for: " + ", ".join(sorted(providers.stubbed)) + ". A pass proves the interfaces line up, not that retrieval works.")

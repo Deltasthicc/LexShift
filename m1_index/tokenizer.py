@@ -1,5 +1,6 @@
 import re
 
+import nltk.data
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
@@ -8,7 +9,27 @@ from nltk.stem import PorterStemmer
 # Resources
 # =========================================================
 
-STOPWORDS = set(stopwords.words("english"))
+def _load_stopwords():
+    try:
+        return set(stopwords.words("english"))
+    except LookupError as exc:
+        raise RuntimeError(
+            "The NLTK stopwords corpus is not installed. Run once (needs the network): python -m nltk.downloader stopwords"
+        ) from exc
+    except ValueError:
+        # NLTK 3.9+ refuses a file that does not resolve to a path under the corpus folder it found. On Windows, a process whose
+        # AppData folder is redirected (a packaged app, a sandbox) resolves the same file elsewhere and the check rejects a
+        # perfectly good corpus. Read the same file directly instead.
+        pointer = nltk.data.find("corpora/stopwords/english")
+        path = getattr(pointer, "path", None)  # a plain file; a corpus that exists only as a zip has no path and is opened through NLTK
+        if path is not None:
+            with open(path, "rb") as fh:
+                return set(fh.read().decode("utf-8").split())
+        with pointer.open() as fh:
+            return set(fh.read().decode("utf-8").split())
+
+
+STOPWORDS = _load_stopwords()
 STEMMER = PorterStemmer()
 
 

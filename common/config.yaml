@@ -23,7 +23,7 @@ paths:                              # relative to the repository root
 #                function pass `python eval/smoke.py`. Override per run with LEXSHIFT_STUBS=none|all|search,health
 stubs:
   search: true       # M1  m1_index.search
-  statute: true      # M2  m2_statute.parse_query + continuity
+  statute: true       # M2  m2_statute.parse_query + continuity (back to true: doc_statutes.jsonl is not committed, so the smoke gate failed; flip it in the commit that adds the sample's doc_statutes.jsonl)
   health: true       # M3  m3_treatment.health
   authority: true    # M3  m3_treatment.authority
 
@@ -46,7 +46,37 @@ m3_treatment:
     overruled: 0.1
     doubted: 0.6                    # doubted / criticised
     default: 1.0
-  pagerank: {damping: 0.85}         # textbook default, M3 may tune
+  pagerank: {damping: 0.85, tol: 1.0e-10, max_iter: 200}   # textbook damping; power iteration to convergence
+  # --- M3 pipeline settings (M3-owned files live here, not under the shared `paths:`) ---
+  mentions: data/processed/m3_mentions.jsonl   # intermediate: every mention with window, resolution, appeal flag
+  reports_dir: m3_treatment/reports            # resolution and classifier reports (committed)
+  labelling_dir: data/labelling                # blank sheets and labelled rounds for the gold set
+  window: {before: 1, after: 1, max_chars: 1500}
+  resolver:                         # see m3_treatment/resolver.py
+    name_threshold: 0.5
+    name_threshold_no_year: 0.75
+    ambiguity_margin: 0.1
+    year_window: 1
+    max_token_df: 0.02
+    min_stop_df: 5
+    range_name_agreement: 0.3
+  llm:                              # offline only; never imported by health()/authority()
+    model: gemini-2.5-flash         # a STABLE Gemini id (never *-latest / *-preview: refused); the cache key includes it,
+                                    # and each cache row records the model_version that answered. Gemini 3 ids want temperature 1.0
+    temperature: 0.0
+    cache: data/llm_labels/m3_llm_labels.jsonl   # committed (D-033): rebuilding doc_health.jsonl needs no API key
+    batch_size: 10                  # windows per request
+    min_interval_s: 1.0             # pacing between requests (free-tier rate limits)
+    max_retries: 4
+    scope: resolved                 # resolved = only mentions linked to a corpus judgment (the only ones that move a score); all
+    few_shot_per_class: 2           # examples taken from the gold set's few-shot pool, excluded from evaluation
+  labels: llm                       # label source for citations.jsonl: llm | baseline
+  min_confidence: 0.5               # a negative label below this confidence does not lower health
+  authority:
+    edge_labels: [followed, neutral]   # Guide: PageRank over positive and neutral edges
+    max_bench: 7                    # bench weight = log(1 + bench) / log(1 + max_bench), capped at 1
+    unknown_bench: 2                # bench size assumed for the weight only when it is unknown (the commonest bench)
+  max_evidence: 5                   # evidence items stored per judgment
 
 ranking:                            # owner: M4
   candidates: 100                   # top-N taken from search() before re-ranking
@@ -65,6 +95,7 @@ ranking:                            # owner: M4
 
 evaluation:                         # owner: M4
   depth: 20                         # evaluate the top-20: the qrels pool is the union of the top-20 of every system
+  judging_dir: eval/judging         # pooled sheets and the two judges' grades, one folder per round
   relevant_threshold: 1             # grade >= 1 counts as relevant for P@k, R@k and MAP
   gain: exp                         # nDCG gain: exp = 2**grade - 1, linear = grade
   seed: 0

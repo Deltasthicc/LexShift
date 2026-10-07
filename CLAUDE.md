@@ -48,6 +48,9 @@ demo). Branches: `m1-index`, `m2-statute`, `m3-treatment`, `m4-rank`; `main` is 
 python -m pytest                 # unit tests
 python eval/smoke.py             # contract + end-to-end check (merge gate)
 LEXSHIFT_STUBS=none python eval/smoke.py   # same, with every provider real
+python -m app.server             # the web interface at http://127.0.0.1:8765
+python -m eval.conformance       # M1 to M3 artefacts and functions against the shared contracts
+python -m eval.submission_check  # the submission checklist, as far as a program can check it (--run adds the tests)
 ```
 
 Windows note: stdout may not be UTF-8. Scripts that print non-ASCII should avoid assuming it.

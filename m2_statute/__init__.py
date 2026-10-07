@@ -3,4 +3,4 @@
 from m2_statute.matcher import continuity
 from m2_statute.query_parser import parse_query
 
-__all__ = ["continuity", "parse_query"]
+__all__ = ["parse_query", "continuity"]

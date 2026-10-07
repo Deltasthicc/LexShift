@@ -68,7 +68,7 @@ LexShift/
 ├── m3_treatment/    citation extraction + resolution, treatment classifier, graph, health(), authority()
 ├── m4_rank/         rank(): normalisation, fusion, explanations, weight tuning
 ├── eval/            queries, qrels, metrics, ablation runner, smoke test
-├── app/             command-line demo
+├── app/             command-line demo and the web interface (server.py, service.py, web/)
 ├── stubs/           fixed-value stand-ins for every cross-module function (flagged, never evidence)
 ├── tests/           unit tests
 └── docs/            CONTRACTS.md, ARCHITECTURE.md, WORKFLOW.md
@@ -110,9 +110,15 @@ Linux), then:
 
 ```bash
 pip install -r requirements.txt
+python -m nltk.downloader stopwords   # once; M1's tokenizer reads this list
+python -m m1_index.index build        # once; M1's search index from data/processed/judgments.jsonl (about 20 seconds, 2.6 MB, git-ignored)
 python -m pytest            # unit tests
 python eval/smoke.py        # contract + end-to-end check; the merge gate for main
 ```
+
+If `python -m nltk.downloader stopwords` stops with `Path traversal blocked` and `EOFError`, your user data folder is redirected (this happens in
+the shell of some desktop apps): run that one command from an ordinary Windows Terminal or PowerShell window instead. It is a one-time download into
+your user profile; the tests and the demo read the list from there.
 
 `make test` and `make smoke` do the same if you have `make`. Every Makefile target is a plain Python command, listed in
 the next section.
@@ -130,15 +136,102 @@ such as `search,health`.
 | Make target | Command | Module |
 |---|---|---|
 | `make download` | `python -m m1_index.ingest download` | M1 |
-| `make build-index` | `python -m m1_index.ingest build` then `python -m m1_index.index build` | M1 |
+| `make build-index` | `python -m m1_index.index build` (not `ingest build`: with an empty `data/raw` it empties `judgments.jsonl`) | M1 |
 | `make build-statutes` | `python -m m2_statute.extractor build` | M2 |
 | `make build-citations` | `python -m m3_treatment.citations build` | M3 |
 | `make build-health` | `python -m m3_treatment.scores build` | M3 |
 | `make demo QUERY='...'` | `python -m app.cli "..." [--offence-date YYYY-MM-DD]` | M4 |
 | `make eval` | `python -m eval.run_ablation --split test` | M4 |
 | `make tune` | `python -m eval.run_ablation --tune` | M4 |
+| `make pool ROUND=round1` | `python -m eval.pool --round round1` | M4 |
+| `make qrels ROUND=round1` | `python -m eval.make_qrels --round round1` | M4 |
+| `make check-data` | `python -m eval.check_data` | M4 |
+| `make feasibility` | `python -m eval.feasibility` | M4 |
+| `make ui` | `python -m app.server` | M4 |
+| `make final-check` | `python -m eval.submission_check` | M4 |
+| the Index page | `python -m app.server`, then `#/index` | M1's pipeline explained live against the real index (read-only) |
+| `make figures` | `python -m eval.figures` | M4 |
+| `make conformance` | `python -m eval.conformance` | all |
 
 The M1 to M3 commands are skeletons that print "not implemented yet" and exit non-zero until their owners land them.
+
+## Demo
+
+### Web interface
+
+```bash
+python -m app.server              # http://127.0.0.1:8765, reachable from this machine only
+LEXSHIFT_STUBS=none python -m app.server --open
+```
+
+One page, offline, Python standard library only: no web font, script or image is fetched from the network (the page's
+Content-Security-Policy forbids it), and the server checks the `Host` header and binds to the loopback address. GSAP with ScrollTrigger
+(scroll motion) and the Outfit font are bundled in `app/web/static` from their official npm packages, with versions, licences and hashes in
+[app/web/static/vendor/README.md](app/web/static/vendor/README.md). Press `/` to focus the search box.
+
+| Screen | What it shows |
+|---|---|
+| **Search** | free text, a section such as `BNS 103`, or a Boolean/proximity query, with an offence date. Each result has its final score as one bar made of the four signals' contributions, the arithmetic and the reason behind each signal, the treatment status with the evidence sentences in full (with the classifier's confidence and the citing bench), and how far it moved against plain BM25 |
+| **Ranking ladder and Compare** | Relevance, + continuity, + treatment and authority: switching steps re-orders the results with an animation, so the movement caused by each signal is visible. Compare puts BM25 alone beside the selected ranking with a line joining each judgment's two positions. All three systems are computed from one collection of signals, so switching is instant. "Treatment flagged only" keeps the results a treatment signal lowered |
+| **How the query was read** | the governing code, the sections found and their offence ids (M2) |
+| **Reader** | the whole judgment in a side panel with the query's words marked, previous and next result, and, opened from a piece of treatment evidence, the cited passage found, marked and scrolled to |
+| **System status** | the indicator in the navigation: which modules are real and which are stubs, the weights and where they come from, which data files exist. In stub mode a bar says so on every screen and every stub signal is hatched |
+| **Evaluation** | the state of the hand-made files, the checks of `python -m eval.check_data`, and the ablation tables once they exist (stub runs are labelled) |
+| **Judging** | the blind two-judge workbench for the pooled sheets: it writes `judge1.csv` and `judge2.csv`, shows no scores, ranks or system names, and never suggests a grade ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)) |
+
+Keyboard: `j` and `k` move between results, `Enter` reads the focused judgment, `e` opens its details, `c` copies its id, `1` `2` `3` pick the signals,
+`m` toggles compare, `f` flags only treatment-lowered results, `/` focuses the search box, `?` lists the shortcuts. In the judging screen `0` `1` `2`
+grade the focused document and focus moves to the next ungraded one.
+
+The interface adds no ranking logic: it shows what `rank()` computes. Its decisions are in DECISIONS.md D-027 and D-028.
+
+### Command-line demo
+
+```bash
+python -m app.cli "BNS 103 murder" --offence-date 2025-01-10 -k 3 --verbose
+```
+
+Options: `--config b0|b1|full` (the ablation systems), `-k`, `--json` for machine-readable output, `--verbose` to also show
+the query parse, the weights and the raw signals, `--evidence-chars N` to shorten the evidence passages. Each result shows its
+score components, the reason behind each signal (for continuity, the statute mapping; for health, the label and the citing
+judgment) and the evidence: the passage from the later judgment, shown in full (it is the evidence), with the classifier's
+confidence and the citing bench when M3 supplies them.
+
+Until M1 to M3 land their real functions the demo runs on the labelled stand-ins and says so loudly. This is real output of
+that mode, **not a search result** (the ids and sentences are placeholders):
+
+```
+LexShift  |  config full  |  top 3  |  offence date 2025-01-10
+query: BNS 103 murder
+
+*** STUB MODE: rel, cont, health, auth come from fixed-value stand-ins, not from real data. This output is NOT a result. ***
+
+ 1. STUB-001   final 0.988
+      rel    [####################]  1.00 x 0.50 = 0.500 (BM25 14.20)
+      cont   [####################]  1.00 x 0.20 = 0.200 (STUB: fixed value, not computed from any judgment)
+      health [####################]  1.00 x 0.20 = 0.200
+      auth   [##################..]  0.88 x 0.10 = 0.088 (raw 0.80)
+ ...
+ 4. STUB-003   final 0.723
+      health [############........]  0.60 x 0.20 = 0.120 (doubted per STUB-000)
+      evidence: doubted in STUB-000
+        "STUB: fixed value, not computed from any judgment (placeholder sentence)"
+```
+
+If `data/processed/doc_meta.jsonl` exists (`python -m app.docmeta` derives it from `judgments.jsonl`), case titles, dates and
+bench sizes are shown next to each id.
+
+## Checking that the modules fit together
+
+```bash
+python -m pytest                      # unit, connection and randomised robustness tests (M1 to M4)
+python eval/smoke.py                  # the merge gate: contracts and an end-to-end rank() with the providers selected in config.yaml
+python -m eval.conformance            # real artefacts and real functions of M1, M2 and M3 against the shared contracts, per module
+```
+
+`eval.conformance` is the one to send to an owner: it names what breaks which contract and who has to act, and it exits 1 on a
+failure. The full per-module findings from the first run on real judgments are in
+[docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md).
 
 ## Data
 
@@ -154,22 +247,37 @@ Systems compared: **B0** BM25 only, **B1** BM25 plus statutory continuity, **ful
 is 30 hand-written queries (10 dev, 20 test) across four types: a BNS query needing an IPC precedent, changed or omitted
 provisions, doctrines with overruled cases, and bare-number collisions. Relevance is graded 0/1/2 by two judges over the
 pooled top-20 of every system. Metrics: P@5, Recall@10, MAP, nDCG@10 and harmful@10 (known-overruled cases in the top 10).
-Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/README.md).
+Weights are tuned on dev only. Protocol and file formats: [eval/README.md](eval/README.md). The queries, the grades and the
+gold overruling list are written **by hand** (two judges, blind sheets from the pooling tool, kappa reported); how, with example
+queries and worked grading rules: [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md).
+
+Reproduce the table with one command, once the real modules and the hand-made queries and judgements exist:
+
+```bash
+python -m eval.run_ablation --tune --split test   # tune weights on DEV, report TEST
+python -m eval.run_ablation --split test          # report TEST with the saved weights
+```
+
+It writes `ablation_test.csv`, `per_query_test.csv`, a Markdown table (with paired-bootstrap intervals against B0 and a
+per-query-type breakdown) and a chart into `eval/results/`. It refuses to run on stub providers (and `--tune` refuses to see
+a test query), and with no queries or judgements it says so instead of printing numbers.
 
 ## Status
 
-*Last updated 2026-10-06. This table is the honest state of `main`; each owner updates their row when they merge.*
+*Last updated 2026-10-07 (M1, M2 and M3 merged into `m4-rank`, including M1's ISO-date commit, and run together on real judgments: [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md)).
+This table is the honest state of the project; each owner updates their row when they merge.*
 
 | Module | State on `main` |
 |---|---|
 | Shared contracts, config, stubs, smoke test | **Done**, with unit tests |
-| M1 corpus, index and `search()` | Skeleton and spec only; served by a stub |
-| M2 statute layer | Skeleton and spec only; served by a stub; `statute_map.csv` is header-only |
-| M3 citations and treatment | Skeleton and spec only; served by stubs; no labels yet |
-| M4 `rank()`, evaluation, demo | Skeleton only on `main`; in progress on `m4-rank` |
-| Judged queries and qrels | Not written yet (they are made by hand) |
+| M1 corpus, index and `search()` | **Updated 2026-10-07:** `judgments.jsonl` is contract-valid (ISO dates, `bench_size` null instead of 0), the zone, parser and index problems are fixed, and the index is rebuilt with `python -m m1_index.index build` (2.6 MB). Still open: `ingest build` empties the corpus when `data/raw` is empty and nothing downloads the data, 3-judge benches are recorded wrongly, the working-directory-relative index path, lnc.ltc and query optimisation are not implemented. Earlier status, kept for the record: **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked; so `stubs.search` stays `true` until the open items above are closed. Needs older judgments in the sample |
+| M2 statute layer | **Updated 2026-10-07:** much better extraction (2,755 references, 6 of 9 statute forms, bare numbers resolved by date, 20 mapped offences) but **`data/statute_map.csv` is malformed, so the real `continuity()` raises and `main` fails the smoke gate**, and `BNS 103` on its own is not read. Earlier status, kept for the record: **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
+| M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), its review fixes (cache key, gold merge, same parties, data checks) are merged and were re-verified; run end to end on 203 real judgments (a stand-in labeller, since there are no Gemini labels or gold set yet) and checked against M4's `rank()` and demo: Koushal comes out overruled by the 5-judge Navtej bench. **Not done:** the real labelling run, the gold set, the F1 table, a built `doc_health.jsonl` for the corpus; so `stubs.health` and `stubs.authority` stay `true` |
+| M4 `rank()`, evaluation, demo | **On `main` since 2026-10-07.** `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker, the feasibility counter, the CLI demo and the web interface (search, compare, evidence, status, evaluation and a blind judging workbench) are implemented and unit-tested against fixtures and the stubs, and the interface was checked in a browser on the 200-judgment sample; the report skeleton and a prose draft, the pipeline diagram (`python -m eval.figures`), the video script and the submission checklist are written, and `python -m eval.submission_check` audits the checklist's machine-checkable items (branch `m4-rank`, merged into `main` on 2026-10-07). What remains for M4 is data that only people can make: the judged queries, the two judges' grades and the gold overruling list, then tuning on dev and the test table, the report PDF and the video |
+| Judged queries and qrels | **Not written yet: they are made by hand.** Candidate queries, query-specific grading criteria, the worksheet and the tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)). `python -m eval.feasibility` shows that the current 200-judgment sample (all 2025) cannot support the plan: of the 30 candidates 3 are answerable, 17 thin and 10 empty, so the corpus has to grow first |
 
-No retrieval-quality result has been measured yet, so none is claimed here.
+No retrieval-quality result has been measured yet, so none is claimed here. The unit tests check the arithmetic against
+hand-computed values on small synthetic fixtures; they say nothing about how well LexShift retrieves.
 
 ## Ethics, data use and AI use
 
@@ -186,6 +294,15 @@ No retrieval-quality result has been measured yet, so none is claimed here.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, ranking function, where each IR concept lives in the code |
 | [docs/CONTRACTS.md](docs/CONTRACTS.md) | Function signatures, file formats, vocabularies, the stub wiring |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | Branches, merge rules, the 36-hour plan |
+| [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md) | Writing the queries and grades by hand: worksheet, grading rules and worked examples, the workbench, the pooling and qrels tools |
+| [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | What to tick before submitting; `python -m eval.submission_check` checks the machine-checkable items |
+| [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md), [docs/REPORT_DRAFT.md](docs/REPORT_DRAFT.md) | The report's structure, and the prose that can be written before the evaluation exists (every result is a `<FILL>` from a file) |
+| [docs/DEMO_M4.md](docs/DEMO_M4.md) | M4's 90-second demo: what to show, what to say, and what to do when a module is not ready |
+| [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The demo video, segment by segment, with the live commands |
+| [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md) | The four modules run together on real judgments: findings per module and what to send each owner |
+| [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md) | The 8-page report, section by section, with where each number comes from |
+| [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The 5 to 8 minute video: segments, live commands, recording checklist |
+| [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | Everything to tick before submitting |
 | [DECISIONS.md](DECISIONS.md) | Decision log |
 | [PROJECT_BRIEF.md](PROJECT_BRIEF.md) | Goal, rubric, constraints, risks |
 | Per-module `README.md` | Each owner's spec, hand-over and "done when" |

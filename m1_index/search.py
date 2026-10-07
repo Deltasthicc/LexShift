@@ -11,24 +11,25 @@ from m1_index.parser import (
 )
 
 
-BASE_DIR = Path.home() / "lexshift"
+# Resolved from the repository, not from a clone location on one machine (it was Path.home() / "lexshift"), and the same
+# files searcher.py reads.
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 INDEX_FILE = (
     BASE_DIR
-    / "data/processed/inverted_index.json"
+    / "data/processed/index/inverted_index.json"
 )
 
 CORPUS_FILE = (
     BASE_DIR
-    / "data/processed/tokenized_judgments.jsonl"
+    / "data/processed/index/tokenized_judgments.jsonl"
 )
 
 
 class SearchEngine:
 
     def __init__(self):
-        print("Loading index...")
-
+        # No progress printing: a library must not write to stdout (it corrupts machine-readable output of the demo).
         with open(INDEX_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -39,11 +40,6 @@ class SearchEngine:
 
         for postings in self.index.values():
             self.all_docs.update(postings.keys())
-
-        print(
-            f"Loaded {len(self.all_docs)} documents "
-            f"and {len(self.index)} terms."
-        )
 
     # ==========================================================
     # Basic term lookup
