@@ -79,4 +79,4 @@ Your numbers after your own edits may differ; read them off the screen.
 
 ## Keys
 
-`/` focuses the search box. In the judging workbench `0` `1` `2` grade, `j` and `k` move, `n` jumps to the next ungraded document.
+In the judging workbench `0` `1` `2` grade, `j` and `k` move, `n` jumps to the next ungraded document.
