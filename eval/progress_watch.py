@@ -89,6 +89,7 @@ class Report:
     merged: list[str] = field(default_factory=list)
     conflicts: dict[str, list[str]] = field(default_factory=dict)
     applied: str = ""
+    unpushed: int = 0
     skipped_audit: bool = False
     facts: dict[str, Any] = field(default_factory=dict)
     checks: list[Check] = field(default_factory=list)
@@ -522,7 +523,8 @@ def render(rep: Report) -> str:
     out.append("|---|---|---|")
     for lane, branch in {**LANE_BRANCHES, "main": "main"}.items():
         subjects = rep.new.get(branch, [])
-        out.append(f"| {lane if lane != 'main' else 'main'} (`{branch}`) | `{rep.shas.get(branch, '?')}` | " + (("<br>".join(subjects)) if subjects else "nothing new") + " |")
+        local = f" ({rep.unpushed} local commits not pushed)" if branch == "m4-rank" and rep.unpushed else ""
+        out.append(f"| {lane if lane != 'main' else 'main'} (`{branch}`) | `{rep.shas.get(branch, '?')}`{local} | " + (("<br>".join(subjects)) if subjects else "nothing new") + " |")
     if rep.merged:
         out.append("")
         out.append("Integrated into the audit branch: " + ", ".join(rep.merged) + ".")
@@ -583,7 +585,10 @@ def check_once(apply: bool = False, force: bool = False, no_integrate: bool = Fa
     previous = load_json(WATCH / "last_report.json")
     fetch()
     before = {b: rev(f"origin/{b}") or rev(b) for b in [*LANE_BRANCHES.values(), "main"]}
+    before["m4-rank"] = rev("m4-rank")  # our own lane is shown as it is here, which may be ahead of what was pushed
     shas = dict(before)
+    ahead = git("rev-list", "--count", "origin/m4-rank..m4-rank")
+    unpushed = int(ahead.stdout.strip() or 0) if ahead.returncode == 0 else 0
     new: dict[str, list[str]] = {}
     base = BRANCH if rev(BRANCH) else "m4-rank"
     for b in [*LANE_BRANCHES.values(), "main"]:
@@ -591,7 +596,7 @@ def check_once(apply: bool = False, force: bool = False, no_integrate: bool = Fa
         subjects = new_commits(ref, base) if rev(ref) else []
         if subjects:
             new[b] = subjects
-    rep = Report(when=time.strftime("%Y-%m-%d %H:%M"), shas=shas, new=new)
+    rep = Report(when=time.strftime("%Y-%m-%d %H:%M"), shas=shas, new=new, unpushed=unpushed)
 
     if no_integrate:
         rep.facts, rep.checks = previous.get("facts", {}), []

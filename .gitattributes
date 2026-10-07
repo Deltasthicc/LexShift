@@ -11,3 +11,8 @@
 Makefile text eol=lf
 *.pdf binary
 *.png binary
+
+# Vendored libraries and fonts are byte-exact: no line-ending conversion, or the SHA-256 recorded in app/web/static/vendor/README.md stops matching on a Windows checkout
+app/web/static/vendor/** -text
+app/web/static/fonts/** -text
+*.woff2 binary

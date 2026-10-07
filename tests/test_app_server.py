@@ -557,3 +557,9 @@ def test_every_nav_link_has_a_route_and_the_status_button_a_name_at_every_width(
     assert [r for _, r in routes] == ["search", "method", "evaluation", "judging", "index"]
     assert 'id="status-btn"' in html and 'aria-label="Show which modules are real' in html, "its text is hidden on narrow screens, so it needs its own name"
     assert re.search(r"@media \(max-width: 900px\) \{\s*\.status-btn #status-label \{ display: none; \}", css), "five links plus the status text overflow below 900px"
+
+
+def test_the_vendored_files_are_never_changed_by_line_ending_conversion():
+    """A Windows checkout with core.autocrlf turns a minified script's line feeds into CRLF, and its recorded SHA-256 no longer matches."""
+    attrs = (WEB.parents[1] / ".gitattributes").read_text(encoding="utf-8")
+    assert "app/web/static/vendor/** -text" in attrs and "app/web/static/fonts/** -text" in attrs and "*.woff2 binary" in attrs

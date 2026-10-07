@@ -163,3 +163,11 @@ def test_new_commits_lists_subjects_only_and_caps_the_list(tmp_path):
     assert all("t@example" not in s for s in subjects)  # no author in the output
     assert pw.is_ancestor("base", "side", cwd=repo) and not pw.is_ancestor("side", "base", cwd=repo)
     assert pw.rev("side", cwd=repo) != "" and pw.rev("nope", cwd=repo) == ""
+
+
+def test_the_report_shows_our_own_lane_as_it_is_locally_with_the_unpushed_count():
+    rep = pw.Report(when="t", shas={"m4-rank": "abc1234"}, unpushed=3)
+    rep.facts = facts()
+    rep.checks = pw.evaluate(rep.facts)
+    rep.lanes, rep.overall = pw.score(rep.checks)
+    assert "`abc1234` (3 local commits not pushed)" in pw.render(rep)
