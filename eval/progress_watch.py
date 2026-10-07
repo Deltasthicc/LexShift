@@ -176,7 +176,13 @@ def integrate() -> tuple[list[str], dict[str, list[str]], str]:
             merged.append(name)
         else:
             conflicts[name] = files
+    refresh_vendored()
     return merged, conflicts, rev("HEAD", cwd=WT)
+
+
+def refresh_vendored() -> None:
+    """A worktree made before .gitattributes marked the vendored files byte-exact holds line-ending-converted copies of them: rewrite those from HEAD."""
+    git("checkout", "HEAD", "--", "app/web/static/vendor", "app/web/static/fonts", cwd=WT)
 
 
 def apply_to_m4_rank(report: Report, previous: dict[str, Any]) -> str:
@@ -186,7 +192,7 @@ def apply_to_m4_rank(report: Report, previous: dict[str, Any]) -> str:
         return f"not applied: the checked-out branch is {head or 'unknown'}, not m4-rank"
     if git("status", "--porcelain").stdout.strip():
         return "not applied: your working tree has uncommitted changes (commit or stash them first)"
-    if not report.merged:
+    if not report.merged or rev(BRANCH) == rev("m4-rank") or is_ancestor(BRANCH, "m4-rank"):
         return "nothing to apply: the integration branch has nothing that m4-rank lacks"
     if not is_ancestor("m4-rank", BRANCH):
         return "not applied: m4-rank has moved since the integration branch was made (it will be merged in at the next check)"
@@ -580,7 +586,24 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def check_once(apply: bool = False, force: bool = False, no_integrate: bool = False) -> Report:
+    """One check, under a lock: a second check started while one is running (the scheduled one and a manual one) reports the last result instead of touching the worktree."""
     WATCH.mkdir(exist_ok=True)
+    lock = WATCH / "lock"
+    if lock.exists() and time.time() - lock.stat().st_mtime < 1800:
+        last = load_json(WATCH / "last_report.json")
+        rep = Report(when=time.strftime("%Y-%m-%d %H:%M"), shas=last.get("shas", {}), skipped_audit=True, facts=last.get("facts", {}),
+                     applied="skipped: another check is still running, so these are the last measured numbers")
+        rep.checks = evaluate(rep.facts)
+        rep.lanes, rep.overall = score(rep.checks)
+        return rep
+    lock.write_text(str(os.getpid()), encoding="utf-8")
+    try:
+        return _check_once(apply, force, no_integrate)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _check_once(apply: bool, force: bool, no_integrate: bool) -> Report:
     state = load_json(WATCH / "state.json")
     previous = load_json(WATCH / "last_report.json")
     fetch()

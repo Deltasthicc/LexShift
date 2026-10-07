@@ -171,3 +171,12 @@ def test_the_report_shows_our_own_lane_as_it_is_locally_with_the_unpushed_count(
     rep.checks = pw.evaluate(rep.facts)
     rep.lanes, rep.overall = pw.score(rep.checks)
     assert "`abc1234` (3 local commits not pushed)" in pw.render(rep)
+
+
+def test_a_check_started_while_another_runs_reports_the_last_result_and_touches_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(pw, "WATCH", tmp_path)
+    (tmp_path / "last_report.json").write_text('{"shas": {"m4-rank": "abc1234"}, "facts": {}}', encoding="utf-8")
+    (tmp_path / "lock").write_text("123", encoding="utf-8")
+    rep = pw.check_once()
+    assert rep.skipped_audit and "another check is still running" in rep.applied and rep.shas == {"m4-rank": "abc1234"}
+    assert (tmp_path / "lock").exists()  # the running check's lock is left alone
