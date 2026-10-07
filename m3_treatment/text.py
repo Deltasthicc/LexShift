@@ -15,17 +15,37 @@ from bisect import bisect_right
 # number and reads as a citation ("[2018] 11 S.C.R." + "62." -> "[2018] 11 S.C.R. 62"). Case-law lists in the
 # headnote write "SCR" without dots, so they are not touched.
 _NOISE_LINE = re.compile(r"^\s*(?:[A-H]|\d{1,4}|SUPREME COURT REPORTS|\[\d{4}\]\s*\d{1,2}\s+S\.C\.R\.(?:\s+\d{1,4})?)\s*$")
+# A margin letter can also share a line with the text: at its start ("C India (1992) 2 SCC 343") or its end
+# ("Peerless A"). Left in, it splits a case name ("Reserve Bank of C India", "Naz B Foundation"). "A" at the start of a
+# line is usually the article, so only B-H are dropped there; mid-line letters are initials ("Aparna A Shah") and stay.
+_MARGIN_START = re.compile(r"^\s*[B-H] (?=[A-Za-z(])")
+_MARGIN_END = re.compile(r"(?<=[A-Za-z.,;:)]) [A-H]\s*$")
 _HYPHEN_BREAK = re.compile(r"(\w)-\n(\w)")
 _SPACES = re.compile(r"\s+")
 
 
 def clean_text(text: str) -> str:
     """Drop margin letters and bare page numbers, join wrapped lines, collapse whitespace."""
-    lines = [ln for ln in text.splitlines() if not _NOISE_LINE.match(ln)]
+    lines = [_MARGIN_END.sub("", _MARGIN_START.sub("", ln)) for ln in text.splitlines() if not _NOISE_LINE.match(ln)]
     joined = "\n".join(lines)
     # "same-\nsex" keeps its hyphen; only the line break goes.
     joined = _HYPHEN_BREAK.sub(r"\1-\2", joined)
     return _SPACES.sub(" ", joined).strip()
+
+
+# The reporter's headnote (summary, "Case Law Cited" list, acts, keywords) ends where the case details begin:
+# "CRIMINAL ORIGINAL JURISDICTION : Writ Petition ..." or "Case Arising From CRIMINAL APPELLATE JURISDICTION: ...".
+_JURISDICTION = re.compile(r"\b(?:CRIMINAL|CIVIL|APPELLATE|ORIGINAL|ADVISORY|EXTRAORDINARY|INHERENT)(?:\s+[A-Z]{4,})?\s+JURISDICTION\b")
+
+
+def body_start(text: str) -> int:
+    """Offset (in the cleaned text) where the reporter's headnote ends and the case itself begins; 0 if not found.
+
+    Mentions before it are the reporter's words (the "Case Law Cited" list annotates each case "- overruled",
+    "- relied on"), not the court's reasoning, so they are the weaker choice of evidence.
+    """
+    m = _JURISDICTION.search(text)
+    return m.start() if m else 0
 
 
 # ----------------------------------------------------------------------------------------------------------------

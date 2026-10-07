@@ -104,3 +104,25 @@ def test_extract_citations_returns_plain_dicts():
             "antecedent": None,
         }
     ]
+
+
+def test_case_names_drop_neighbouring_words():
+    """Regression (integration review M3-6): names kept the words around them."""
+    text = (
+        "A Constitution Bench in Bachan Singh v. State of Punjab (1980) 2 SCC 684 held so. "
+        "In Ram Kishan Vs. State of Haryana the Court refused. "
+        "Mahabir & Ors. v. State of Haryana Code of Criminal Procedure, 1973. "
+        "Case Law Cited Aparna A Shah v. Sheth Developers Private Limited [2013] 7 SCR 69. "
+        "Navtej Johar v. Union of India Writ Petition (Criminal) No. 76. "
+        "Karuppudayar v. State Rep. by the Deputy Superintendent of Police (2025) 1 SCC 1. "
+        "P. Radhakrishnan & Anr. v. Cochin Devaswom Board & Ors. of the High Court refused."
+    )
+    assert [n.name for n in find_case_names(text)] == [
+        "Bachan Singh v. State of Punjab",
+        "Ram Kishan Vs. State of Haryana",
+        "Mahabir & Ors. v. State of Haryana",
+        "Aparna A Shah v. Sheth Developers Private Limited",
+        "Navtej Johar v. Union of India",
+        "Karuppudayar v. State Rep. by the Deputy Superintendent of Police",
+        "P. Radhakrishnan & Anr. v. Cochin Devaswom Board & Ors.",
+    ]

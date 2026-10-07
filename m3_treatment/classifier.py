@@ -177,11 +177,23 @@ def parse_response(text: str, n: int) -> list[tuple[str, float]]:
     return [out[i] for i in range(n)]
 
 
+def is_moving_alias(model: str) -> bool:
+    """A model id that Google re-points to new releases ("gemini-flash-latest") or may change at short notice
+    ("-preview", "-exp"). Labels made under it could silently come from different models under one cache key."""
+    return bool(re.search(r"latest|preview|exp", model))
+
+
 def gemini_caller(model: str, temperature: float = 0.0) -> Callable[[str], str]:
-    """A function prompt -> JSON text backed by the Gemini API (GEMINI_API_KEY)."""
+    """A function prompt -> JSON text backed by the Gemini API (GEMINI_API_KEY).
+
+    The returned function records the exact version that answered in its `model_version` attribute, so every cache
+    row says which model produced it.
+    """
     from google import genai
     from google.genai import types
 
+    if is_moving_alias(model):
+        raise RuntimeError(f"m3_treatment.llm.model {model!r} is a moving alias or a preview; pin a stable model id")
     if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
         raise RuntimeError("set GEMINI_API_KEY to run the offline LLM labelling")
     client = genai.Client()
@@ -193,8 +205,11 @@ def gemini_caller(model: str, temperature: float = 0.0) -> Callable[[str], str]:
     )
 
     def call(prompt: str) -> str:
-        return client.models.generate_content(model=model, contents=prompt, config=config).text
+        response = client.models.generate_content(model=model, contents=prompt, config=config)
+        call.model_version = getattr(response, "model_version", None) or model
+        return response.text
 
+    call.model_version = None
     return call
 
 
@@ -235,6 +250,7 @@ class LLMLabeller:
                     {
                         "key": cache_key(self.model, w, self.shots),
                         "model": self.model,
+                        "model_version": getattr(self.call, "model_version", None),
                         "prompt_version": PROMPT_VERSION,
                         "shots": self.shots,
                         "n_examples": len(self.examples),
@@ -350,7 +366,7 @@ def _m3_cfg() -> dict:
 def default_cache() -> LLMCache:
     from common.config import ROOT
 
-    return LLMCache(ROOT / _m3_cfg().get("llm", {}).get("cache", "data/cache/m3_llm_labels.jsonl"))
+    return LLMCache(ROOT / _m3_cfg().get("llm", {}).get("cache", "data/llm_labels/m3_llm_labels.jsonl"))
 
 
 def classify_llm(window: str) -> tuple[str, float]:
@@ -358,7 +374,7 @@ def classify_llm(window: str) -> tuple[str, float]:
     labelled under the current pool (or zero-shot when there is none) is an error."""
     from m3_treatment.pipeline import few_shot_examples
 
-    model = _m3_cfg().get("llm", {}).get("model", "gemini-2.5-flash")
+    model = _m3_cfg()["llm"]["model"]
     row = default_cache().get(cache_key(model, window, shots_fingerprint(few_shot_examples())))
     if row is None:
         raise KeyError("window not in the LLM cache; run `python -m m3_treatment.pipeline label-llm` offline first")

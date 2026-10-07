@@ -14,6 +14,8 @@ tracked.
 | `data/processed/doc_meta.jsonl` | no | M4 | Optional: title, date and bench per judgment, for the demo |
 | `data/statute_map.csv` | yes | M2 | Typed IPC to BNS (and key CrPC to BNSS) mapping, every row with its sources |
 | `data/treatment_gold.csv` | yes | M3 | Hand-labelled citation windows |
+| `data/labelling/` | yes | M3 | Labelling sheets, adjudications and the frozen few-shot pool |
+| `data/llm_labels/m3_llm_labels.jsonl` | yes | M3 | Frozen Gemini treatment labels (hash keys, no text): rebuilds need no API key |
 | `data/sample/` | yes, if used | M1 | A small shareable sample of the corpus (see OQ-1 in `DECISIONS.md`) |
 
 Record formats and vocabularies are in [../docs/CONTRACTS.md](../docs/CONTRACTS.md).

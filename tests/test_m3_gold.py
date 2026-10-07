@@ -161,3 +161,13 @@ def test_swapped_sheets_are_refused(tmp_path):
     (tmp_path / "x.csv").rename(paths["L2"])
     with pytest.raises(MergeError):
         merge(tmp_path, tmp_path / "gold.csv")
+
+
+def test_merge_reads_sheets_saved_by_excel_with_a_byte_order_mark(tmp_path):
+    from m3_treatment.gold import merge
+
+    rows = "window_id,window,gold_label,labeller,notes\nw1,[[A v. B]] is followed.,followed,{who},\n"
+    (tmp_path / "m3_L1.csv").write_text(rows.format(who="L1"), encoding="utf-8-sig")
+    (tmp_path / "m3_L2.csv").write_text("window_id,window,gold_label,labeller,notes\n", encoding="utf-8-sig")
+    rep = merge(out_dir=tmp_path, gold_path=tmp_path / "gold.csv")
+    assert rep["L1"] == 1 and rep["written"] == 1

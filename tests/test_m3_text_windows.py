@@ -93,3 +93,54 @@ def test_appeal_history_rules():
 def test_clean_text_drops_dotted_scr_running_heads_but_not_case_law_lists():
     raw = "end of para.\n[2018] 11 S.C.R.\n62. The Court held.\n[2014] 11 SCR 1009\nrelied on\n[2018] 13  S.C.R. 296\n"
     assert clean_text(raw) == "end of para. 62. The Court held. [2014] 11 SCR 1009 relied on"
+
+
+def test_clean_text_drops_margin_letters_on_the_edge_of_a_text_line_but_keeps_initials():
+    raw = "Peerless General Finance vs. Reserve Bank of \nC India (1992) 2 SCC 343, Peerless A \nGeneral Finance."
+    assert clean_text(raw) == "Peerless General Finance vs. Reserve Bank of India (1992) 2 SCC 343, Peerless General Finance."
+    assert clean_text("Case Law Cited\nAparna A Shah v. Sheth Developers") == "Case Law Cited Aparna A Shah v. Sheth Developers"
+    assert clean_text("A Constitution Bench held so.") == "A Constitution Bench held so."  # the article stays
+
+
+def test_body_start_is_the_jurisdiction_line():
+    from m3_treatment.text import body_start
+
+    text = "Case Law Cited X v. Y (2014) 1 SCC 1 - overruled. Case Arising From CRIMINAL APPELLATE JURISDICTION: Criminal Appeal No. 15"
+    assert text[body_start(text) :].startswith("CRIMINAL APPELLATE JURISDICTION")
+    assert body_start("Writ Petition (Criminal) No. 76. CRIMINAL ORIGINAL JURISDICTION : W.P.") > 0
+    assert body_start("No headnote here: the criminal jurisdiction of the court.") == 0
+
+
+def test_running_headers_are_the_judgments_own_title():
+    """Regression: headers glued to the following words fell through to appeal history (43 -> 662 tags)."""
+    from m3_treatment.windows import is_own_title
+
+    assert is_own_title("Mahabir & Ors. v. State of Haryana", "Mahabir & Ors. v. State of Haryana Code of Criminal Procedure")
+    assert is_own_title("Sudershan Singh Wazir v. State (NCT of Delhi) & Ors.", "Sudershan Singh Wazir v. State")
+    title = "NAVTEJ SINGH JOHAR & ORS. versus UNION OF INDIA THR. SECRETARY MINISTRY OF LAW AND JUSTICE"
+    assert is_own_title(title, "NAVTEJ SINGH JOHAR v. UOI THR. SECY")
+    assert is_own_title(title, "Navtej Johar v. Union of India")
+    # a different case that shares the private party's name is a citation, not a header
+    assert not is_own_title("Sanjay v. State of Uttar Pradesh", "Sanjay v. Union of India")
+    assert not is_own_title("Ram Singh v. State of Haryana", "Ram Singh v. State of Punjab")
+    assert not is_own_title("Navtej Singh Johar v. Union of India", "Suresh Kumar Koushal v. Naz Foundation")
+
+
+def test_appeal_cues_must_be_near_the_mention():
+    """A High Court decision cited for its holding is not appeal history because a later sentence sets aside the
+    order under appeal."""
+    from m3_treatment.windows import appeal_context
+
+    text = (
+        "The Bombay High Court in Ramesh Patil v. Suresh Jadhav, 2010 Cri LJ 123 held that the delay was fatal. "
+        "We agree. The appeal is allowed and the judgment of the High Court is set aside."
+    )
+    start = text.index("Ramesh")
+    end = text.index(" held")
+    ctx = appeal_context(text, start, end, sentence_spans(text))
+    assert "set aside" not in ctx
+    assert not is_appeal_history(ctx, "A v. B", "Ramesh Patil v. Suresh Jadhav", cited_is_sc=False)
+    under_appeal = "This appeal is against the impugned judgment in Ramesh Patil v. Suresh Jadhav, 2010 Cri LJ 123."
+    s = under_appeal.index("Ramesh")
+    ctx = appeal_context(under_appeal, s, s + 30, sentence_spans(under_appeal))
+    assert is_appeal_history(ctx, "A v. B", "Ramesh Patil v. Suresh Jadhav", cited_is_sc=False)

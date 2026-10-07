@@ -156,8 +156,12 @@ class MergeError(ValueError):
 
 
 def _read_sheet(path: Path, who: str) -> tuple[list[dict], list[str]]:
-    """(labelled rows, every window_id in the sheet). A missing sheet, a duplicate id or a bad label is an error."""
-    from common.io import read_delimited
+    """(labelled rows, every window_id in the sheet). A missing sheet, a duplicate id or a bad label is an error.
+
+    Read as UTF-8 with an optional byte-order mark: Excel's "CSV UTF-8" adds one, which would otherwise hide the
+    `window_id` column.
+    """
+    import csv
 
     if not path.exists():
         raise MergeError(
@@ -165,7 +169,9 @@ def _read_sheet(path: Path, who: str) -> tuple[list[dict], list[str]]:
             "before merging, otherwise the second labeller's work and every adjudication would be lost."
         )
     rows, ids, seen = [], [], set()
-    for i, r in enumerate(read_delimited(path), start=2):
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        sheet = list(csv.DictReader(fh))
+    for i, r in enumerate(sheet, start=2):
         wid = (r.get("window_id") or "").strip()
         if not wid or wid in seen:
             raise MergeError(f"{path.name} line {i}: missing or duplicate window_id {wid!r}")
@@ -293,8 +299,12 @@ def main(argv: list[str] | None = None) -> int:
     mg.add_argument("--allow-incomplete", action="store_true", help="merge only the labelled rows while labelling continues")
     args = ap.parse_args(argv)
     if args.cmd == "sample":
-        cands = sample_candidate_windows(args.n, args.seed)
-        paths = write_sheets(cands, _labelling_dir(), args.double, args.seed)
+        try:
+            cands = sample_candidate_windows(args.n, args.seed)
+            paths = write_sheets(cands, _labelling_dir(), args.double, args.seed)
+        except (FileNotFoundError, FileExistsError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         print(f"{len(cands)} candidate windows; buckets {dict(Counter(c['bucket'] for c in cands))}")
         for k, p in paths.items():
             print(f"  {k}: {p}")

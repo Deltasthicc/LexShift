@@ -193,3 +193,61 @@ def test_missing_bench_sizes_stop_the_build_loudly(project, capsys):
     assert rep["lowered_health"] == {} and rep["negatives_not_counted"].get("unknown bench")
     assert rep["warnings"] and "bench" in rep["warnings"][0]
     assert "M1 data checks" in (pipeline._report_dir() / "resolution.md").read_text(encoding="utf-8")
+
+
+NAVTEJ_WITH_HEADNOTE = {
+    **NAVTEJ,
+    "text": "Case Law Cited Suresh Kumar Koushal & Anr. v. Naz Foundation & Ors. (2014) 1 SCC 1 : [2013] 17 SCR 116 "
+    "– overruled. List of Acts Penal Code, 1860. CRIMINAL ORIGINAL JURISDICTION : Writ Petition (Criminal) No. 76 of 2016. "
+    + NAVTEJ["text"],
+}
+
+
+def test_evidence_prefers_the_reasoning_sentence_and_keeps_the_marker(project):
+    """Regression: the evidence for Koushal was the headnote's "Case Law Cited" line, not the sentence that overrules,
+    and citations.jsonl had lost the [[ ]] around the cited case."""
+    from pathlib import Path
+
+    from m3_treatment import pipeline
+    from m3_treatment.scores import health
+
+    write_jsonl(project["paths"]["judgments"], [KOUSHAL, NAVTEJ_WITH_HEADNOTE, COMMON_CAUSE, SMALL])
+    pipeline.run_extract()
+    to_koushal = [m for m in pipeline.load_mentions() if m["citing_doc"] == "2018_7_379_746" and m["cited_doc"] == "2013_17_116_254"]
+    assert to_koushal[0]["in_headnote"] and not all(m["in_headnote"] for m in to_koushal)
+    pipeline.run_label_llm(call=FakeLLM())
+    pipeline.run_citations("llm")
+    rows = list(read_jsonl(project["paths"]["citations"]))
+    assert rows and all("[[" in r["window"] and "]]" in r["window"] for r in rows)
+    headnote_line = [r for r in rows if r["cited_doc"] == "2013_17_116_254" and r["label"] == "overruled" and "Case Law Cited" in r["window"]]
+    assert headnote_line  # the headnote line is labelled overruled too, so the choice below is a real one
+
+    pipeline.run_health()
+    h, ev = health("2013_17_116_254")
+    assert h == pytest.approx(0.1)
+    assert ev[0]["in_headnote"] is False
+    assert "[[Suresh Kumar Koushal (supra)]] needs to be, and is hereby, overruled" in ev[0]["sentence"]
+
+    # without the mentions file the evidence cannot be ranked by zone, and the build says so
+    Path(project["m3_treatment"]["mentions"]).unlink()
+    rep = pipeline.run_health()
+    assert any("m3_mentions.jsonl" in w for w in rep["warnings"])
+
+
+def test_stale_citations_are_reported(project):
+    from m3_treatment import pipeline
+
+    pipeline.run_extract()
+    pipeline.run_label_llm(call=FakeLLM())
+    pipeline.run_citations("llm")
+    write_jsonl(project["paths"]["judgments"], [KOUSHAL, COMMON_CAUSE, SMALL])  # M1 rebuilt the corpus without Navtej
+    rep = pipeline.run_health()
+    assert rep["judgments"] == 3 and any("Rebuild it" in w for w in rep["warnings"])
+
+
+def test_missing_inputs_are_one_clear_line(project, capsys):
+    from m3_treatment import pipeline
+
+    assert pipeline.main(["citations"]) == 1  # no m3_mentions.jsonl yet
+    err = capsys.readouterr().err
+    assert err.startswith("error:") and "Traceback" not in err

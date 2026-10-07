@@ -7,10 +7,16 @@ Branch: `m3-treatment`. You work from M1's `judgments.jsonl` and hand M4 the `he
 ## Status
 
 The code is built and tested (`python -m pytest tests/test_m3_*.py`), including an end-to-end run on a four-judgment
-corpus with a fake LLM. It has also run on 9 real judgments downloaded from the AWS bucket. **Not done yet:** the
-full corpus (waiting for M1's `judgments.jsonl`), the hand-labelled gold set, the Gemini run and therefore the F1 table.
-`stubs.health` and `stubs.authority` stay `true` until `doc_health.jsonl` exists for the corpus and
-`python eval/smoke.py` passes with them `false` (see OQ-5 in `DECISIONS.md`).
+corpus with a fake LLM. It has also run on M1's 200 judgments, and on those plus Koushal, Navtej Johar and Joseph Shine
+from the AWS bucket with stand-in labels: `health(Koushal)` is 0.1 with a reasoning sentence of Navtej as evidence
+(D-033). **Not done yet:** the hand-labelled gold set, the Gemini run and therefore the F1 table, and
+`citations.jsonl` / `doc_health.jsonl` for M1's corpus. `stubs.health` and `stubs.authority` stay `true` until
+`doc_health.jsonl` exists for the corpus and `python eval/smoke.py` passes with them `false`.
+
+`citations.jsonl` keeps `[[ ]]` around the cited mention in `window`; evidence items carry `confidence`, `citing_bench`,
+`in_headnote` and, on negatives, `offence_ids`. Rebuild both files whenever M1 rebuilds `judgments.jsonl` (`health`
+warns when they come from another corpus). The Gemini labels are committed in `data/llm_labels/`, so rebuilding needs
+no API key.
 
 ## What you build
 
@@ -42,7 +48,7 @@ python -m m3_treatment.pipeline extract          # judgments.jsonl -> m3_mention
 python -m m3_treatment.gold sample --n 250 --double 60   # blank sheets in data/labelling/ -> label them by hand
 python -m m3_treatment.gold merge                # kappa, disagreements.csv, data/treatment_gold.csv
 python -m m3_treatment.pipeline label-llm --dry-run      # how many windows, requests and tokens
-GEMINI_API_KEY=... python -m m3_treatment.pipeline label-llm   # Gemini labels into data/cache/m3_llm_labels.jsonl
+GEMINI_API_KEY=... python -m m3_treatment.pipeline label-llm   # Gemini labels into data/llm_labels/m3_llm_labels.jsonl (commit it)
 python -m m3_treatment.pipeline evaluate         # reports/classifier_f1.md (LLM and baseline, per class)
 python -m m3_treatment.citations build           # extract + data/processed/citations.jsonl  (make build-citations)
 python -m m3_treatment.scores build              # data/processed/doc_health.jsonl           (make build-health)
@@ -69,7 +75,7 @@ judgments.jsonl
 ## You hand over
 
 `citations.jsonl`, `doc_health.jsonl`, `treatment_gold.csv`, `health()`, `authority()`, and the classifier F1 table.
-Contract: [../docs/CONTRACTS.md](../docs/CONTRACTS.md). Decisions: D-016 to D-024 in [../DECISIONS.md](../DECISIONS.md).
+Contract: [../docs/CONTRACTS.md](../docs/CONTRACTS.md). Decisions: D-016 to D-024 and D-033 in [../DECISIONS.md](../DECISIONS.md).
 
 ## IR concepts you explain in the video
 
