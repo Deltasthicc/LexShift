@@ -1,7 +1,7 @@
 // Entry point: theme, the router between the views (one per module, plus search and judging), and wiring the pages together.
 import { $, $$, show, store } from "./dom.js";
 import { scrollToTarget, setNavActive, swapView } from "./motion.js";
-import { applyParams, initSearch, paramsDiffer, renderFormula } from "./search.js";
+import { applyParams, focusQuery, initSearch, paramsDiffer, renderFormula } from "./search.js";
 import { initStatus } from "./status.js";
 import { renderEvaluation } from "./evaluation.js";
 import { renderJudging } from "./judging.js";
@@ -53,7 +53,7 @@ async function route() {
     if (changed || view === "statutes" || view === "treatment") await RENDER[view]();
     return;
   }
-  if (!searchBooted) { searchBooted = true; applyParams(params); }
+  if (!searchBooted) { searchBooted = true; applyParams(params, { scroll: true }); } // a shared link opens on its results, past the intro
   else if (paramsDiffer(params)) applyParams(params, { scroll: true });
 }
 
@@ -75,6 +75,8 @@ async function boot() {
   initTooltips();
   initSearch();
   wireNavLinks();
+  // the intro screen's two links scroll down to the search instead of changing the route
+  ["#intro-start", "#scroll-cue"].forEach((sel) => $(sel).addEventListener("click", (e) => { e.preventDefault(); focusQuery(); }));
   window.addEventListener("hashchange", route);
   const status = await initStatus();
   renderFormula(status);
