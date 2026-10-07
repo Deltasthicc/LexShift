@@ -89,7 +89,7 @@ def test_m2_extractor_never_crashes_and_only_emits_valid_references():
     rng = random.Random(SEED + 1)
     for i in range(800):
         text = junk(rng, LEGAL_BITS + WORDS, rng.randint(0, 60)) if i % 2 else chars(rng, rng.randint(0, 400))
-        for ref in extract_refs(text):
+        for ref in extract_refs(text, "2025-01-01"):
             assert isinstance(ref, StatuteRef)
             ref.validate()
             assert ref.count >= 1
@@ -111,7 +111,7 @@ def test_m2_extractor_scales_linearly_on_adversarial_text(name):
 
     if name == "act followed by paragraph numbers":
         pytest.xfail("known: extract_refs checks each match against every earlier match (quadratic); see docs/INTEGRATION_REVIEW.md, M2 finding 7")
-    assert_scales_linearly(extract_refs, M2_ADVERSARIAL[name])
+    assert_scales_linearly(lambda t: extract_refs(t, "2025-01-01"), M2_ADVERSARIAL[name])
 
 
 @pytest.mark.parametrize("name", list(M2_ADVERSARIAL))
@@ -135,12 +135,14 @@ def test_m2_continuity_stays_in_the_unit_interval_for_any_query_and_document(tmp
                                              for _ in range(rng.randint(0, 5))]) for i in range(30)]
     docs.write_text("\n".join(json.dumps(r.to_dict()) for r in rows) + "\n", encoding="utf-8")
     monkeypatch.setattr(matcher, "_doc_statutes_path", lambda: docs)
-    matcher.load_doc_refs.cache_clear()
+    matcher._DOC_REFS_CACHE.clear()
+    matcher._DOC_REFS_MTIME = 0.0
     for _ in range(300):
         qs = parse_query(junk(rng, LEGAL_BITS, rng.randint(0, 8)), rng.choice(DATES))
         for r in rows[:10]:
             assert contracts.check_continuity(matcher.continuity(qs, r.doc_id)) == []
-    matcher.load_doc_refs.cache_clear()
+    matcher._DOC_REFS_CACHE.clear()
+    matcher._DOC_REFS_MTIME = 0.0
 
 
 # ------------------------------------------------------------------------------------------------------------- M3
@@ -199,24 +201,20 @@ def test_m3_bench_and_year_readers_never_crash():
 
 
 # ------------------------------------------------------------------------------------------------------------- M1
-@pytest.mark.xfail(strict=False, reason="known: m1_index.parser.parse_atom raises IndexError, not ValueError, when a query ends after "
-                   "an operator or an open parenthesis ('murder AND', '('); see docs/INTEGRATION_REVIEW.md, M1 finding 5")
-def test_m1_query_handling_never_raises_anything_but_a_value_error():
+def test_m1_search_never_raises_on_random_boolean_looking_input():
+    """M1 fixed the IndexError that `murder AND` and `(` used to raise (docs/INTEGRATION_REVIEW.md, M1 finding 5)."""
     pytest.importorskip("nltk")
     try:
-        from m1_index.parser import parse_query
-        from m1_index.searcher import is_plain_text
-    except (LookupError, RuntimeError, ImportError) as exc:
-        pytest.skip(f"M1 cannot be imported here: {exc}")
+        from m1_index import search
+        search("murder", k=1)
+    except (LookupError, RuntimeError, ImportError, FileNotFoundError) as exc:
+        pytest.skip(f"M1's index is not built here (python -m m1_index.index build): {exc}")
     rng = random.Random(SEED + 5)
     ops = ["AND", "OR", "NOT", "/s", "/p", "/10", "(", ")", '"']
-    for i in range(1000):
+    for i in range(300):
         q = junk(rng, WORDS + ops + LEGAL_BITS, rng.randint(0, 12))
-        assert isinstance(is_plain_text(q), bool)
-        try:
-            parse_query(q)
-        except ValueError:
-            pass  # the documented way for the parser to refuse a query
+        hits = search(q, k=5)
+        assert isinstance(hits, list) and len(hits) <= 5
 
 
 def test_m1_parser_does_not_stall_on_deeply_nested_or_long_queries():

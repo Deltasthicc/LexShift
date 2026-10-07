@@ -33,6 +33,71 @@ here). `main` (`76ad44c`), `m2-statute` (`f0a629d`) and `m3-treatment` (`7777a6b
 | Whole suite | 519 passed, 2 expected failures (the known `parse_atom` and `extract_refs` cases) |
 | `eval.feasibility` on the 30 candidate queries | 3 answerable, 17 thin, 10 empty (the 200 judgments are all from 2025) |
 
+## Second update, 2026-10-07 (later): M1's and M2's final pushes
+
+Fetched `origin` again. `m1-index` moved by two commits (`0283d5a` "Update M1 indexing and corpus pipeline", `bfc6e7c` "Fix unknown bench sizes in judgment corpus"),
+`m2-statute` by one (`fa0269f` "Finalize M2 statute layer, query parser, and matcher"), and `main` now holds M2's work (`38c4240`). `m3-treatment` is unchanged
+(`7777a6b`). All were merged here (one conflict: `m1_index/searcher.py`, resolved by taking M1's rewrite; the helpers my earlier connection fixes added to it
+were dropped and the tests that used them now test M1's public `search()`).
+
+Each branch was also run **on its own** (a separate checkout of `origin/<branch>`):
+
+| Branch as pushed | `python eval/smoke.py` | Notes |
+|---|---|---|
+| `m1-index` | 0 failed, 2 skipped (every provider a stub) | the new index file is not in git: run `python -m m1_index.index build` first |
+| `m2-statute` | **2 FAIL** | `doc_statutes.jsonl` missing and `statute_map.csv` invalid (see M2-8); its own tests are not collected by its `pytest.ini` and 7 of 8 fail |
+| `m3-treatment` | 0 failed, 2 skipped | unchanged |
+| **`main`** | **2 FAIL** | M2 set `stubs.statute: false` and merged without `doc_statutes.jsonl` (ignored by git) and with the invalid map, so **the merge gate fails on `main`** |
+
+### M1: what the new push fixed
+
+* **`judgments.jsonl` is contract-valid: 200 of 200** (bench size is `None` where unknown, never 0; dates are ISO).
+* **Boolean, phrase and proximity search still work, and malformed queries no longer raise** (`murder AND`, `(` return a result or an empty list). A plain scan of every token of
+  every zone (`/api/m1/verify`, tested) agrees with the index for `murder AND intention` (36 judgments), `"common intention"`, `OR`, `AND NOT`.
+* **The zone problem is gone**: 0 of 63 matches for `murder` now score 0 (it was 3 of 66).
+* **The index is small and rebuildable**: `python -m m1_index.index build` reads `judgments.jsonl` and writes `index.pkl.gz` (2.6 MB, about 18 s here), loaded in about 0.5 s.
+  The 74 MB it replaces is no longer read.
+
+### M1: still open
+
+| # | Severity | Finding |
+|---|---|---|
+| 13 | **High** | `python -m m1_index.ingest build` opens `judgments.jsonl` for writing before it reads anything: with an empty `data/raw` it **rewrites the corpus with zero records**, and `download()` only prints a line, so the corpus still cannot be fetched or rebuilt from the source. M1's own error message ("Run 'make build-index'") pointed at this command; `make build-index` now builds only the index |
+| 14 | Medium | `bench_size` for the 27 unknown records is still wrong where the coram line names the judges: `eval.conformance` finds 105 of 122 agree, and 0 of 10 benches of 3 or more are right. M3 works around this by reading the coram line itself |
+| 15 | Medium | The old index files (`inverted_index.json`, `tokenized_judgments.jsonl`, 74 MB) are still tracked and no longer read; the tokenised copy still has `29 May 2025` dates; `search.py`, `parser.py`, `text_tokenizer.py` are older copies of the live modules |
+| 16 | Medium | `search()` loads `data/processed/index` **relative to the working directory**: from any other folder it raises `FileNotFoundError` (an earlier connection fix had made it repository-relative; the rewrite undid it) |
+| 17 | Low | `/s` and `/p` are accepted but mean "within 5 tokens", not same sentence or paragraph; positions restart at 0 in each zone and are merged into one list per document, so phrase and proximity tests compare positions across zones (the checks above agree, but a coincidence across a zone boundary is possible); `filters` honours `year` and `bench_size` only |
+| 18 | Info | Listed in the owner's plan but **not in the pushed code**: lnc.ltc cosine scoring (`scoring.py` is still the stub), query optimisation (operands run in the order written), a comparison against a library BM25 (`rank_bm25` is not installed). The Index page marks them instead of describing them |
+
+### M2: what the new push fixed
+
+Extraction is much better: **2,755 references in 199 of 200 judgments** (it was 691 in 172), bare numbers resolve by the offence date (`section 103` dated 2020 is `IPC 103`, dated 2025
+is `BNS 103`), lists and the spelled-out forms read (`302/34`, `Sections 302 and 307 of the Indian Penal Code`, `I.P.C.`, `120-B`), seven prose offences are understood
+(`murder`, `sedition`, ...), the document table reloads when the file changes, and the map holds 20 offences. `eval.conformance` reads **6 of the 9** forms the Build Guide lists
+(it was 2). Measured with a corrected copy of the map (below): `BNS 103 -> IPC 302 (OFF_MURDER) (equivalent)` shows up as the continuity explanation of real results.
+
+### M2: still open
+
+| # | Severity | Finding |
+|---|---|---|
+| 8 | **Blocker** | `data/statute_map.csv` on `m2-statute` and `main` is **malformed**: the original header and IPC 302 row, then a second header (`offence_id,act1,section1,act2,section2,relation,weight`) and 20 rows in that other layout. `load_map()` stops on line 3, so **every real `continuity()` call for a query that names a statute raises `SchemaError`**, and the Search page shows that error. One header, the contract's columns (`old_act,old_section,new_act,new_section,relation,weight,source,note`) and a `source` per row fix it (a converted copy made all of the following work) |
+| 9 | **High** | An act followed by a bare number is not read: `BNS 103`, `IPC 302`, `BNS 3(5)` give no references (the headline query form), and `Section 482 Cr.P.C.` is read as **IPC** 482 (wrong act). Requiring the word `Section` removes the paragraph-number false positives in judgments but should not apply to queries |
+| 10 | High | M2's own 8 tests: 7 fail on M2's own code (they describe the old behaviour) and are not collected by M2's `pytest.ini`; `main` fails the shared smoke gate (above) |
+| 11 | Medium | `doc_statutes.jsonl` is not committed (`data/processed/*` is ignored), so the switch cannot be flipped for CI or a clean clone; 20 of 20 rows cite no official source; the prose lexicon has 7 entries (`attempt to commit suicide` is not one of them) |
+
+**What to send M1**
+> Thank you for the ISO dates, the real `bench_size` values (`None` instead of 0), the zone fix, the safe query parser and the 2.6 MB index with a rebuild command: all four of
+> my checks on your side pass now. Open: (1) `ingest build` empties `judgments.jsonl` when `data/raw` is empty (it opens the file for writing first) and its message points
+> people to it: guard it and make `download()` real; (2) `bench_size` is still wrong for 3-judge benches (read the coram line in the text); (3) load the index relative to the
+> repository, not the working directory; (4) delete the old 74 MB index files and the tokenised copy from git; (5) lnc.ltc, query optimisation and the library BM25
+> comparison are on your list but not in the code: implement them or take them off the list before the demo. Your Index page is at `#/index` in the interface.
+
+**What to send M2**
+> Extraction is a big step up (2,755 references, 6 of 9 forms). Before it can be used: (1) `data/statute_map.csv` is two files glued together with two headers, so
+> `load_map()` stops on line 3 and `continuity()` raises for every query that names a section: one header, the contract columns, a `source` column; (2) `BNS 103` and `IPC 302` on
+> their own are not read any more (allow an act followed by a number in queries), and `Section 482 Cr.P.C.` comes out as IPC; (3) your own tests fail on your own code; (4) `main` now
+> fails `python eval/smoke.py` because `stubs.statute` is false and `doc_statutes.jsonl` is not in git: flip the switch only in the commit that adds the file (or commit it).
+
 ## Where each module stands
 
 | Module | Code | Connected to the others as pushed | After the fixes on `m4-rank` | Still open for the owner |

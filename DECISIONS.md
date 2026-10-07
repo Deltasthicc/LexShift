@@ -395,6 +395,27 @@ frame rate on the owner's machine (the pane throttles animation frames, so timin
 * **pytest folder.** A locked `.pytest_tmp` (a file watcher or editor holding it open on Windows) made every test error with `PermissionError` before it started. A
   root `conftest.py` now falls back to a fresh folder for that run and removes stale ones; `.gitignore` covers `.pytest_tmp*`.
 
+### D-031 (2026-10-07) Fourth integration pass, the Index page for M1, and the 90-second M4 demo
+* **Branches.** `origin` fetched again: `m1-index` (+2), `m2-statute` (+1) and `main` (M2 merged) had moved; `m3-treatment` had not. All merged into `m4-rank`. Each branch was also
+  run on its own: `main` and `m2-statute` **fail the shared smoke gate** (M2's `stubs.statute: false` without `doc_statutes.jsonl`, and a malformed `statute_map.csv`). Findings and
+  the messages to send are in docs/INTEGRATION_REVIEW.md ("Second update"). M2's files were taken as pushed; the malformed map was **not** edited here: the owner has to decide the
+  layout. A converted copy was used in a scratch folder only, to measure what works once the map is fixed (real search plus real statute: `BNS 103 -> IPC 302 (OFF_MURDER)` appears as
+  continuity, `section 103` follows the offence date, prose `sedition` and `murder` are understood).
+* **Tests follow M1's and M2's new code**: helpers my earlier connection fix had added to `searcher.py` (`is_plain_text`, `_engine`, `min_year`) no longer exist, so those tests
+  now call the public `search()`; `extract_refs` takes the judgment date. Failures that remain are M2's own and are not hidden: the continuity robustness test and M2's own 7 hour-0 tests.
+  `eval.conformance` now checks the index `search()` actually loads (`index.pkl.gz`) and calls the old files stale; CI builds the index before the tests.
+* **`make build-index` builds only the index.** `python -m m1_index.ingest build` empties `judgments.jsonl` when `data/raw` is empty (M1 finding 13).
+* **The Index page** (`#/index`, `app/m1_view.py`, `app/web/static/js/m1.js`): a separate page for M1's pipeline built from the owner's list (corpus, text processing, indexing, querying,
+  retrieval). It reads M1's real index, read-only: counts, zone shares, the tokenizer step by step (and a flag if the walk-through ever differs from M1's `tokenize()`), postings with
+  zone counts and positions, the parsed query tree, zone-weighted BM25 with one calculation worked out, a **check of the index against a plain scan of all the text** (agrees for Boolean,
+  phrase, AND, OR and NOT queries tested; proximity is not checked), and measured latency (median and 95th percentile of 15 runs; no library-BM25 comparison exists). Items on the
+  owner's list that the pushed code does not contain (lnc.ltc, query optimisation) are marked "not in the pushed code", lnc.ltc by probing `m1_index.scoring` at run time. Design: the
+  `gpt-taste` skill was run with the seed 1017 (length of the request): artistic-asymmetry hero, Geist, a horizontal accordion for the five stages, inline typography pills in the
+  headline, a feedback-style carousel (the query as a quotation, its best results as overlapping plates), scale-and-fade scroll on the panels and hover physics on tiles and plates;
+  opacity never goes below 0.5 and nothing is dimmed with a filter. Not measured: frame rate on the owner's machine.
+* **`docs/DEMO_M4.md`**: M4's 90-second demo from the existing screens (no separate M4 page is needed: the Search page already shows fusion, the ladder and the breakdown; Evaluation and
+  Judging show how it will be measured), with what to say, the queries that work on the current corpus, and what to do when a module is not ready.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared

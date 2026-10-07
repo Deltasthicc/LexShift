@@ -40,6 +40,7 @@
         <li><a href="#/method" data-route="method">Method</a></li>
         <li><a href="#/evaluation" data-route="evaluation">Evaluation</a></li>
         <li><a href="#/judging" data-route="judging">Judging</a></li>
+        <li><a href="#/index" data-route="index">Index</a></li>
       </ul>
       <div class="nav-tools">
         <button type="button" class="status-btn" id="status-btn" aria-haspopup="dialog" aria-controls="status-panel">
@@ -292,6 +293,119 @@
         <div class="container cta-inner">
           <h2 class="cta-title" id="cta-title" data-reveal>Run the search that shows its work.</h2>
           <button type="button" class="btn btn-primary btn-xl magnetic" id="cta-btn">Start a search</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================================================================ INDEX (M1) -->
+    <div id="view-index" data-view="index" hidden>
+      <section class="ix-hero" aria-labelledby="ix-title">
+        <div class="container ix-hero-grid">
+          <div class="ix-hero-copy">
+            <h1 class="ix-title" id="ix-title">How a judgment becomes
+              <span class="inline-art ix-pill ix-pill-docs" aria-hidden="true"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span>
+              a searchable index
+              <span class="inline-art ix-pill ix-pill-lattice" aria-hidden="true"><svg viewBox="0 0 44 22"><path d="M3 4 L16 11 L3 18 M16 11 H41 M28 4 L41 11 L28 18" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              you can interrogate</h1>
+            <p class="ix-lede">The retrieval core of LexShift, from the source text to the ranked list. Every panel below runs against the index that is on disk, so what you see is exactly what <span class="mono">search()</span> uses.</p>
+            <div class="ix-cta-row">
+              <a class="btn btn-primary btn-xl" href="#ix-corpus" data-ix-jump="#ix-corpus">Start with the corpus</a>
+              <a class="btn btn-secondary btn-xl" href="#ix-query" data-ix-jump="#ix-query">Try a query</a>
+            </div>
+          </div>
+          <div class="ix-art" aria-hidden="true">
+            <div class="ix-art-plate ap-1"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><i class="l5"></i></div>
+            <div class="ix-art-plate ap-2"><span>murder</span><span>intent</span><span>section</span><span>302</span><span>ipc</span></div>
+            <div class="ix-art-plate ap-3"><svg viewBox="0 0 120 80"><g class="ix-lattice"><path d="M10 14 H110 M10 40 H110 M10 66 H110"/><path d="M26 6 V74 M60 6 V74 M94 6 V74"/></g><g class="ix-dots"><circle cx="26" cy="14" r="4.5"/><circle cx="60" cy="40" r="4.5"/><circle cx="94" cy="14" r="4.5"/><circle cx="26" cy="66" r="4.5"/><circle cx="94" cy="66" r="4.5"/></g></svg></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="container ix-error" id="ix-error" role="alert" hidden></div>
+
+      <section class="ix-stages" aria-labelledby="ix-stages-title">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="ix-stages-title">Five stages, one pipeline</h2>
+            <p>Point at a stage to open it. Each lists what M1 built there, and marks anything in the list that the pushed code does not contain yet.</p>
+          </div>
+          <div class="ix-acc" id="ix-acc" role="list" aria-label="The five stages of M1's pipeline"></div>
+          <p class="ix-key" id="ix-key"><span class="ix-state s-live">live on this page</span><span class="ix-state s-shown">explained with real numbers</span><span class="ix-state s-missing">not in the pushed code</span></p>
+        </div>
+      </section>
+
+      <section class="ix-work">
+        <div class="container ix-work-stack">
+
+          <article class="ix-plate" id="ix-corpus" aria-labelledby="ix-h-corpus">
+            <header class="ix-plate-head"><h2 id="ix-h-corpus">The corpus</h2><p>Judgments are read into one file with their text, title, date, bench size and four zones. The index is built from that file and nothing else.</p></header>
+            <div class="ix-tiles" id="ix-corpus-tiles"></div>
+            <div class="ix-block"><h3>Where the words sit</h3><p class="ix-sub">Tokens per zone, after text processing. Zones are weighted when a document is scored.</p><div class="ix-zonebar" id="ix-zonebar"></div><ul class="ix-legend" id="ix-zone-legend"></ul></div>
+            <div class="ix-block"><h3>A few records</h3><div class="ix-scroll"><table class="ix-table" id="ix-sample"><thead><tr><th>Judgment</th><th>Date</th><th>Bench</th><th>Id</th></tr></thead><tbody></tbody></table></div></div>
+            <div class="ix-items" id="ix-items-corpus"></div>
+          </article>
+
+          <article class="ix-plate" id="ix-text" aria-labelledby="ix-h-text">
+            <header class="ix-plate-head"><h2 id="ix-h-text">Text processing</h2><p>Type any legal text. Each word is shown with what the tokenizer did to it, using M1's own code.</p></header>
+            <form class="ix-form" id="ix-text-form"><label class="ix-label" for="ix-text-in">Text</label><textarea id="ix-text-in" rows="2" maxlength="2000" spellcheck="false">Sections 302 and 120-B of the IPC, [2025] 1 S.C.R. 1 : 2025 INSC 8. The appellants were murdered, the court said.</textarea><button class="btn btn-secondary btn-small" type="submit">Process</button></form>
+            <div class="ix-tokens" id="ix-tokens" aria-live="polite"></div>
+            <ul class="ix-legend ix-legend-tok"><li><i class="k-kept"></i>kept as written: a section, a citation, a number</li><li><i class="k-stem"></i>stemmed (word becomes stem)</li><li><i class="k-stop"></i>stop word, removed</li></ul>
+            <p class="ix-note" id="ix-text-note"></p>
+            <div class="ix-items" id="ix-items-text"></div>
+          </article>
+
+          <article class="ix-plate" id="ix-index" aria-labelledby="ix-h-index">
+            <header class="ix-plate-head"><h2 id="ix-h-index">The index</h2><p>For every term: which judgments contain it, where, and in which zone. Look a term up to see its postings.</p></header>
+            <div class="ix-tiles" id="ix-index-tiles"></div>
+            <div class="ix-block">
+              <form class="ix-form ix-form-inline" id="ix-term-form"><label class="ix-label" for="ix-term-in">Look up a term</label><input id="ix-term-in" type="text" value="murder" maxlength="80" autocomplete="off" spellcheck="false"><button class="btn btn-secondary btn-small" type="submit">Show postings</button></form>
+              <div class="ix-chips" id="ix-topterms" aria-label="Most common terms"></div>
+              <div id="ix-term-out" aria-live="polite"></div>
+            </div>
+            <div class="ix-items" id="ix-items-index"></div>
+          </article>
+
+          <article class="ix-plate ix-plate-wide" id="ix-query" aria-labelledby="ix-h-query">
+            <header class="ix-plate-head"><h2 id="ix-h-query">Querying</h2><p>Five kinds of query, each parsed and run live. Page through them or type your own below.</p></header>
+            <div class="ix-car" id="ix-car">
+              <div class="ix-car-stage" id="ix-car-stage" aria-live="polite">
+                <div class="ix-car-copy"><p class="ix-car-kind" id="ix-car-kind"></p><blockquote class="ix-quote" id="ix-quote"></blockquote><div class="ix-tree" id="ix-car-tree" aria-label="Parsed query"></div></div>
+                <div class="ix-hitplates" id="ix-car-plates"></div>
+              </div>
+              <div class="ix-car-bar"><button class="ix-arrow" id="ix-car-prev" type="button" aria-label="Previous query"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ix-dots-nav" id="ix-car-dots" role="tablist"></div><button class="ix-arrow" id="ix-car-next" type="button" aria-label="Next query"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 L16 12 L9 19" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+            </div>
+            <form class="ix-form ix-form-inline" id="ix-q-form"><label class="ix-label" for="ix-q-in">Your query</label><input id="ix-q-in" type="text" value="murder AND intention" maxlength="300" autocomplete="off" spellcheck="false"><button class="btn btn-primary btn-small" type="submit">Parse and run</button></form>
+            <div class="ix-syntax"><span><b>AND OR NOT</b> and brackets</span><span><b>"two words"</b> a phrase</span><span><b>a /10 b</b> within 10 tokens</span><span><b>plain words</b> any word counts</span></div>
+            <div class="ix-tree ix-tree-main" id="ix-tree" aria-label="Parsed query"></div>
+            <div class="ix-items" id="ix-items-query"></div>
+          </article>
+
+          <article class="ix-plate" id="ix-retrieve" aria-labelledby="ix-h-retrieve">
+            <header class="ix-plate-head"><h2 id="ix-h-retrieve">Retrieval</h2><p>The same query, scored. Each result shows how much of its score came from each zone, and one BM25 calculation is worked out with the real numbers.</p></header>
+            <div class="ix-tiles" id="ix-ret-tiles"></div>
+            <div class="ix-hits" id="ix-hits"></div>
+            <div class="ix-grid-2">
+              <div class="ix-block ix-worked" id="ix-worked"></div>
+              <div class="ix-block ix-api" id="ix-api"></div>
+            </div>
+            <div class="ix-actions">
+              <button class="btn btn-secondary btn-small" id="ix-verify" type="button">Check against a plain scan</button>
+              <button class="btn btn-secondary btn-small" id="ix-bench" type="button">Measure latency</button>
+              <a class="btn btn-secondary btn-small" id="ix-open-search" href="#/">Open in Search with the full ranking</a>
+            </div>
+            <div class="ix-out" id="ix-verify-out" aria-live="polite"></div>
+            <div class="ix-out" id="ix-bench-out" aria-live="polite"></div>
+            <div class="ix-items" id="ix-items-retrieve"></div>
+          </article>
+
+        </div>
+      </section>
+
+      <section class="ix-close" aria-labelledby="ix-close-title">
+        <div class="container ix-close-inner">
+          <h2 class="ix-close-title" id="ix-close-title">This is signal one of four.</h2>
+          <p>Relevance from BM25 is the first term of the ranking function. Continuity, treatment and authority are added on top of it.</p>
+          <div class="ix-cta-row"><a class="btn btn-primary btn-xl" href="#/">Search with all four signals</a><a class="btn btn-secondary btn-xl" href="#/method">How they are combined</a></div>
         </div>
       </section>
     </div>

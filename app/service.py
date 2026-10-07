@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from app.docmeta import describe
+from app.m1_view import ExplorerError, IndexExplorer
 from common.config import ROOT, STUB_GROUPS, load_config, resolve_path
 from common.io import read_jsonl
 from common.providers import Providers, load_providers, stub_flags
@@ -194,13 +195,42 @@ class DocStore:
 class Service:
     """Everything the web interface can ask for. One instance serves all requests; provider calls are serialised."""
 
-    def __init__(self, providers: Providers | None = None, loader: Callable[..., Providers] = load_providers) -> None:
+    def __init__(self, providers: Providers | None = None, loader: Callable[..., Providers] = load_providers,
+                 explorer: IndexExplorer | None = None) -> None:
         self._providers = providers
+        self._explorer = explorer
         self._loader = loader
         self._lock = threading.RLock()  # M1's engine is not documented as thread-safe: one search at a time
         self._write_lock = threading.Lock()
         self._docs: DocStore | None = None
         self._docs_key: tuple[str, str] | None = None
+
+    # -- M1's Index page ---------------------------------------------------------------------------
+    def _explore(self, call: Callable[[IndexExplorer], Any]) -> Any:
+        if self._explorer is None:
+            self._explorer = IndexExplorer()
+        try:
+            return call(self._explorer)
+        except ExplorerError as exc:
+            raise ServiceError(exc.status, exc.kind, exc.message) from exc
+
+    def m1_overview(self) -> dict[str, Any]:
+        return self._explore(lambda x: x.overview())
+
+    def m1_analyze(self, text: Any) -> dict[str, Any]:
+        return self._explore(lambda x: x.analyze(text))
+
+    def m1_term(self, word: Any) -> dict[str, Any]:
+        return self._explore(lambda x: x.term(word))
+
+    def m1_query(self, query: Any, k: Any = 5) -> dict[str, Any]:
+        return self._explore(lambda x: x.query(query, k))
+
+    def m1_verify(self, query: Any) -> dict[str, Any]:
+        return self._explore(lambda x: x.verify(query))
+
+    def m1_bench(self) -> dict[str, Any]:
+        return self._explore(lambda x: x.bench())
 
     # -- plumbing ----------------------------------------------------------------------------------
     def providers(self) -> Providers:

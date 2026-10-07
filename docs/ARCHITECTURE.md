@@ -118,6 +118,7 @@ browser  ->  app/server.py   routing, Host/Origin checks, CSP, static files
 | `GET /api/doc?id=` | one judgment's text, control characters stripped |
 | `GET /api/evaluation` | the evaluation data's state, the `check_data` findings, the ablation tables |
 | `GET /api/judge/rounds`, `/api/judge/sheet`; `POST /api/judge/grade` | the blind judging workbench (the only write) |
+| `GET /api/m1/overview`, `/analyze?text=`, `/term?t=`, `/query?q=&k=`, `/verify?q=`, `/bench` | the Index page: M1's index read directly (read-only): corpus and index numbers, the tokenizer step by step, postings, the parsed query and BM25 breakdown, a check against a plain scan, measured latency (`app/m1_view.py`) |
 
 Everything read from a judgment is inserted into the page as text, never as markup, and the Content-Security-Policy allows no inline
 script or style and no other origin. Stub signals are marked on every result. Decisions: DECISIONS.md D-027.

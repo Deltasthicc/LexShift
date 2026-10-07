@@ -502,3 +502,39 @@ def test_a_link_that_carries_a_query_runs_in_the_tab_that_is_already_open():
     search = (WEB / "static" / "js" / "search.js").read_text(encoding="utf-8")
     assert "export function paramsDiffer" in search and "paramsDiffer" in main
     assert "applyParams(params, { scroll: true })" in main
+
+
+# ----------------------------------------------------------------------------------------------- the Index page (M1)
+OWNER_LIST = ["Official data", "Judgments", "Extraction", "Metadata", "Zones", "Tokenization and normalization", "Stopwords", "Stemming",
+              "Legal and citation preservation", "Inverted index", "Positional index", "Zone index", "Boolean parser", "Phrase parser",
+              "Proximity parser", "Execute Boolean queries against index", "Execute phrase queries", "Execute proximity queries",
+              "Query optimization", "BM25", "lnc.ltc", "Heap Top-K", "Final search() API", "Benchmark"]
+
+
+def test_the_index_page_is_wired_into_the_page_the_nav_and_the_router():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    main = (WEB / "static" / "js" / "main.js").read_text(encoding="utf-8")
+    assert 'id="view-index"' in html and 'href="#/index"' in html and 'data-route="index"' in html
+    assert "renderIndexPage" in main and '"/index"' in main
+    for anchor in ("ix-acc", "ix-corpus", "ix-text", "ix-index", "ix-query", "ix-retrieve", "ix-car", "ix-verify", "ix-bench"):
+        assert f'id="{anchor}"' in html, anchor
+
+
+def test_every_item_on_the_m1_owners_list_appears_on_the_index_page():
+    js = (WEB / "static" / "js" / "m1.js").read_text(encoding="utf-8")
+    missing = [item for item in OWNER_LIST if f'name: "{item}"' not in js]
+    assert not missing, missing
+
+
+def test_the_index_page_marks_what_the_pushed_code_does_not_contain():
+    """lnc.ltc is probed from M1's scoring module at run time; query optimisation was checked in searcher.py and is marked as missing."""
+    js = (WEB / "static" / "js" / "m1.js").read_text(encoding="utf-8")
+    assert 'name: "lnc.ltc", state: "cap:lnc_ltc"' in js
+    assert 'name: "Query optimization", state: "missing"' in js
+
+
+def test_the_index_script_inserts_text_only_and_the_page_has_no_inline_style_or_script():
+    js = (WEB / "static" / "js" / "m1.js").read_text(encoding="utf-8")
+    assert "innerHTML" not in js and "insertAdjacentHTML" not in js and not re.search(r"(?<![A-Za-z])eval\(", js)
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    assert not re.search(r"\sstyle=|\son[a-z]+=", html), "the Content-Security-Policy allows no inline style or handler"

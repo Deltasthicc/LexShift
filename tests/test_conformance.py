@@ -51,6 +51,8 @@ def test_missing_artefacts_are_info_not_failure(workspace):
 def test_a_conforming_corpus_passes_the_m1_data_checks(workspace):
     docs = [judgment(f"{2000 + i}_1_{i}_{i + 5}_EN", date=f"{2000 + i}-03-01") for i in range(6)]
     write_jsonl(workspace.paths["judgments"], docs)
+    pytest.importorskip("nltk")
+    _live_index(workspace, [d["doc_id"] for d in docs])
     rep = Report()
     check_m1_data(rep, workspace.cfg)
     assert [f for f in rep.items if f.level == "FAIL"] == []
@@ -94,6 +96,42 @@ def test_the_index_and_the_corpus_must_cover_the_same_documents(workspace):
     rep = Report()
     check_m1_data(rep, workspace.cfg)
     assert levels(rep, "M1", "index and judgments.jsonl cover") == ["FAIL"]
+
+
+def _live_index(workspace, doc_ids):
+    """Write M1's real index file (index.pkl.gz) for the given documents, the way `python -m m1_index.index build` does."""
+    from common.schema import Judgment
+    from m1_index.index import InvertedIndex
+
+    judgments = [Judgment(doc_id=d, title=d, date="2025-01-02", bench_size=2, judges=[], reporter_citations=[], zones={"holding": "murder intention"}, text="murder")
+                 for d in doc_ids]
+    InvertedIndex.build(judgments).save(workspace.dir / "index")
+
+
+def test_the_live_search_index_is_what_is_checked_and_old_index_files_are_called_stale(workspace):
+    pytest.importorskip("nltk")
+    ids = [f"2025_1_{i}_{i + 2}_EN" for i in range(3)]
+    write_jsonl(workspace.paths["judgments"], [judgment(d) for d in ids])
+    _live_index(workspace, ids[:2])  # the index misses one judgment
+    write_jsonl(workspace.dir / "index" / "tokenized_judgments.jsonl", [{"doc_id": d} for d in ids])  # the old copy looks fine and must not hide it
+    rep = Report()
+    check_m1_data(rep, workspace.cfg)
+    assert levels(rep, "M1", "search index (index.pkl.gz) and judgments.jsonl cover") == ["FAIL"]
+    assert levels(rep, "M1", "old index files are still") == ["WARN"]
+    (workspace.dir / "index" / "index.pkl.gz").unlink()
+    _live_index(workspace, ids)
+    rep = Report()
+    check_m1_data(rep, workspace.cfg)
+    assert levels(rep, "M1", "search index (index.pkl.gz) and judgments.jsonl cover") == ["PASS"]
+
+
+def test_a_missing_search_index_is_a_failure_that_names_the_build_command(workspace):
+    ids = [f"2025_1_{i}_{i + 2}_EN" for i in range(2)]
+    write_jsonl(workspace.paths["judgments"], [judgment(d) for d in ids])
+    rep = Report()
+    check_m1_data(rep, workspace.cfg)
+    (item,) = [f for f in rep.items if f.check == "the search index is not built"]
+    assert item.level == "FAIL" and "python -m m1_index.index build" in item.detail
 
 
 def test_m2_data_checks_catch_missing_coverage_empty_offence_ids_and_paragraph_numbers(workspace):
@@ -182,3 +220,36 @@ def test_the_json_form_is_machine_readable_and_the_exit_code_follows_the_failure
     rep = Report()
     rep.add("M1", "FAIL", "x")
     assert rep.count("FAIL") == 1 and render(rep).splitlines()[-1].startswith("1 FAIL")
+
+
+MAP_HEADER = "old_act,old_section,new_act,new_section,relation,weight,source,note\n"
+
+
+def test_a_statute_map_with_a_second_header_pasted_into_the_data_is_one_finding_not_a_crash(workspace):
+    """M2's pushed map was two files glued together: the contract header and a row, then another header and rows in a different layout."""
+    docs = [judgment("D1")]
+    write_jsonl(workspace.paths["judgments"], docs)
+    pathlib_path = __import__("pathlib").Path(workspace.paths["statute_map"])
+    pathlib_path.write_text(MAP_HEADER + "IPC,302,BNS,103,equivalent,1.0,a blog,\n"
+                            "offence_id,act1,section1,act2,section2,relation,weight\nOFF_MURDER,IPC,302,BNS,103,equivalent,1.0\n", encoding="utf-8")
+    rep = Report()
+    check_m2_data(rep, workspace.cfg, docs)
+    (item,) = [f for f in rep.items if f.check == "statute_map.csv matches the contract"]
+    assert item.level == "FAIL" and "line 3" in item.detail and "continuity() raises" in item.detail
+
+
+def test_a_statute_map_with_the_wrong_header_is_reported_with_both_headers(workspace):
+    write_jsonl(workspace.paths["judgments"], [judgment("D1")])
+    __import__("pathlib").Path(workspace.paths["statute_map"]).write_text("offence_id,act1,section1,act2,section2,relation,weight\nOFF_MURDER,IPC,302,BNS,103,equivalent,1.0\n", encoding="utf-8")
+    rep = Report()
+    check_m2_data(rep, workspace.cfg, [judgment("D1")])
+    (item,) = [f for f in rep.items if f.check == "statute_map.csv matches the contract"]
+    assert item.level == "FAIL" and "old_act" in item.detail and "offence_id" in item.detail
+
+
+def test_a_well_formed_statute_map_still_passes(workspace):
+    write_jsonl(workspace.paths["judgments"], [judgment("D1")])
+    __import__("pathlib").Path(workspace.paths["statute_map"]).write_text(MAP_HEADER + "IPC,302,BNS,103,equivalent,1.0,a blog,\n", encoding="utf-8")
+    rep = Report()
+    check_m2_data(rep, workspace.cfg, [judgment("D1")])
+    assert [f for f in rep.items if f.check == "statute_map.csv matches the contract"] == []

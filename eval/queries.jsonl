@@ -1,0 +1,30 @@
+{"qid": "dev01", "text": "punishment for murder under section 103 BNS", "offence_date": "2025-01-10", "split": "dev", "type": "A"}
+{"qid": "dev02", "text": "cheating and dishonestly inducing delivery of property BNS 318", "offence_date": "2024-09-15", "split": "dev", "type": "A"}
+{"qid": "dev03", "text": "presumption of dowry death BNS 80", "offence_date": "2025-03-01", "split": "dev", "type": "A"}
+{"qid": "dev04", "text": "offence of sedition", "offence_date": "2025-02-01", "split": "dev", "type": "B"}
+{"qid": "dev05", "text": "attempt to commit suicide is punishable", "offence_date": "2025-02-01", "split": "dev", "type": "B"}
+{"qid": "dev06", "text": "consensual same-sex relations section 377", "offence_date": null, "split": "dev", "type": "C"}
+{"qid": "dev07", "text": "anticipatory bail protection limited to a fixed period section 438", "offence_date": null, "split": "dev", "type": "C"}
+{"qid": "dev08", "text": "arrest guidelines family welfare committee section 498A", "offence_date": null, "split": "dev", "type": "C"}
+{"qid": "dev09", "text": "section 80", "offence_date": "2020-01-01", "split": "dev", "type": "D"}
+{"qid": "dev10", "text": "section 80", "offence_date": "2025-01-01", "split": "dev", "type": "D"}
+{"qid": "test01", "text": "common intention joint liability BNS 3(5)", "offence_date": "2025-01-10", "split": "test", "type": "A"}
+{"qid": "test02", "text": "criminal conspiracy BNS 61", "offence_date": "2024-10-01", "split": "test", "type": "A"}
+{"qid": "test03", "text": "definition of rape and consent BNS 63", "offence_date": "2025-01-15", "split": "test", "type": "A"}
+{"qid": "test04", "text": "punishment for rape BNS 64", "offence_date": "2025-01-15", "split": "test", "type": "A"}
+{"qid": "test05", "text": "quashing of FIR inherent powers BNSS 528", "offence_date": "2025-02-01", "split": "test", "type": "A"}
+{"qid": "test06", "text": "adultery as an offence", "offence_date": "2025-01-01", "split": "test", "type": "B"}
+{"qid": "test07", "text": "mob lynching murder by a group", "offence_date": "2025-01-01", "split": "test", "type": "B"}
+{"qid": "test08", "text": "organised crime syndicate", "offence_date": "2025-01-01", "split": "test", "type": "B"}
+{"qid": "test09", "text": "terrorist act definition", "offence_date": "2025-01-01", "split": "test", "type": "B"}
+{"qid": "test10", "text": "adultery section 497 constitutional validity", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test11", "text": "right to privacy as a fundamental right", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test12", "text": "section 103", "offence_date": "2020-06-01", "split": "test", "type": "D"}
+{"qid": "test13", "text": "section 103", "offence_date": "2025-02-01", "split": "test", "type": "D"}
+{"qid": "test14", "text": "section 318", "offence_date": "2020-06-01", "split": "test", "type": "D"}
+{"qid": "test15", "text": "section 318", "offence_date": "2025-02-01", "split": "test", "type": "D"}
+{"qid": "test16", "text": "attempt to murder with intention or knowledge under section 109 BNS", "offence_date": "2025-04-15", "split": "test", "type": "A"}
+{"qid": "test17", "text": "admissibility of electronic evidence without a section 65B certificate", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test18", "text": "confessional statement to an NDPS officer under section 67", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test19", "text": "whether the informant and investigating officer may be the same person", "offence_date": null, "split": "test", "type": "C"}
+{"qid": "test20", "text": "automatic vacation of a High Court stay after six months in criminal proceedings", "offence_date": null, "split": "test", "type": "C"}

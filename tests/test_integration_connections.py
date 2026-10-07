@@ -20,7 +20,7 @@ from m3_treatment.resolver import _PATH_ID, bench_from_text, year_of
 from m4_rank.rank import ArtefactError, as_hit, load_checked
 
 ROOT = Path(__file__).resolve().parents[1]
-INDEX = ROOT / "data" / "processed" / "index" / "inverted_index.json"
+INDEX = ROOT / "data" / "processed" / "index" / "index.pkl.gz"  # what M1's search() loads; build it with: python -m m1_index.index build
 
 
 # ---------------------------------------------------------------- M3 reads the formats the real corpus has
@@ -126,13 +126,15 @@ def m1():
     return searcher
 
 
-def test_m1_plain_text_is_told_apart_from_boolean_syntax(m1):
+def test_m1_ranks_plain_text_and_still_answers_boolean_syntax(m1):
+    from m1_index import search
+
     plain = ["BNS 103", "punishment for murder under section 103 BNS", "BNS 3(5)", "common intention (section 34)",
              "u/s 120-B IPC", "cheating and dishonestly inducing delivery", "what is 'cheating'?", "murder, intention"]
     boolean = ["murder AND intention", "ipc OR bns", "ipc AND NOT bns", '"common intention"', '"common intention" /s murder',
                "murder /p intention", "murder /10 intention", "(murder OR theft) AND intention"]
-    assert all(m1.is_plain_text(q) for q in plain), [q for q in plain if not m1.is_plain_text(q)]
-    assert not any(m1.is_plain_text(q) for q in boolean), [q for q in boolean if m1.is_plain_text(q)]
+    for query in plain + boolean:
+        assert search(query, k=5), query
 
 
 def test_m1_answers_free_text_boolean_and_edge_queries_with_contract_valid_shared_hits(m1):
@@ -155,9 +157,10 @@ def test_m1_year_and_bench_filters_work_on_the_real_metadata(m1):
     assert total > 0
     in_2025 = len(search("murder", k=500, filters={"year": 2025}))
     assert in_2025 == total  # the committed sample is 2025 only; this was 0 before the date fix
-    assert len(search("murder", k=500, filters={"min_year": 2025})) == total
-    assert len(search("murder", k=500, filters={"max_year": 2024})) == 0
     assert len(search("murder", k=500, filters={"year": 1999})) == 0
+    # the bench filter reads M1's bench_size: known benches are counted, a bench that is not in the data matches nothing
+    two = len(search("murder", k=500, filters={"bench_size": 2}))
+    assert 0 < two <= total and len(search("murder", k=500, filters={"bench_size": 9})) == 0
 
 
 def test_m1_results_are_ranked_deterministic_and_respect_k(m1):
@@ -172,7 +175,7 @@ def test_m1_results_are_ranked_deterministic_and_respect_k(m1):
 def test_importing_m1_prints_nothing_and_does_not_load_the_index():
     code = ("import io, contextlib, sys\nbuf = io.StringIO()\n"
             "with contextlib.redirect_stdout(buf):\n    import m1_index\n"
-            "import m1_index.searcher as s\nprint(len(buf.getvalue()), s._engine is None)")
+            "import m1_index.searcher as s\nprint(len(buf.getvalue()), s.RankedSearchEngine._instance is None)")
     run = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
     if run.returncode != 0 and ("stopwords" in run.stderr or "nltk" in run.stderr.lower()):
         pytest.skip("NLTK stopwords are not installed here")

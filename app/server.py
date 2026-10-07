@@ -147,6 +147,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json(s.judge_rounds())
         elif path == "/api/judge/sheet":
             self._json(s.judge_sheet(_one(q, "round"), _one(q, "judge")))
+        elif path == "/api/m1/overview":
+            self._json(s.m1_overview())
+        elif path == "/api/m1/analyze":
+            self._json(s.m1_analyze(_one(q, "text")))
+        elif path == "/api/m1/term":
+            self._json(s.m1_term(_one(q, "t")))
+        elif path == "/api/m1/query":
+            self._json(s.m1_query(_one(q, "q"), _one(q, "k", "5")))
+        elif path == "/api/m1/verify":
+            self._json(s.m1_verify(_one(q, "q")))
+        elif path == "/api/m1/bench":
+            self._json(s.m1_bench())
         else:
             self._error(404, "not_found", "No such endpoint.")
 

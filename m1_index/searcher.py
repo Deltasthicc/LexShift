@@ -1,20 +1,22 @@
+"""M1 Search Engine: Boolean, proximity, zone-weighted BM25 and lnc.ltc."""
+
 from __future__ import annotations
 
-import json
-import math
 import heapq
-import re
+import math
 from pathlib import Path
 
-from common.schema import Hit  # the shared contract's Hit (this module used to define its own)
-
-from .search import SearchEngine
-
-
-ROOT = Path(__file__).resolve().parent.parent
-INDEX_PATH = ROOT / "data" / "processed" / "index" / "inverted_index.json"
-CORPUS_PATH = ROOT / "data" / "processed" / "index" / "tokenized_judgments.jsonl"
-
+from common.schema import Hit, ZONES
+from m1_index.index import InvertedIndex
+from m1_index.query_parser import (
+    BooleanNode,
+    NotNode,
+    PhraseNode,
+    ProximityNode,
+    TermNode,
+    parse_query,
+)
+from m1_index.tokenizer import tokenize
 
 ZONE_WEIGHTS = {
     "headnote": 3.0,
@@ -22,579 +24,192 @@ ZONE_WEIGHTS = {
     "facts": 1.0,
     "arguments": 0.75,
 }
-
 K1 = 1.2
 B = 0.75
 
-# Syntax that makes a query Boolean/phrase/proximity: quotes, /s /p /k, and ALL-CAPS AND, OR, NOT. Anything else is plain
-# text and is ranked as a bag of words (OR over the stemmed terms), the way BM25 is normally used. Parentheses are grouping
-# only when one of those operators is present: "BNS 3(5)" is a section number, not a group.
-_OPERATORS = re.compile(r'"|(?<!\S)/(?:[sp]|\d+)\b|\b(?:AND|OR|NOT)\b')  # (?<!\S): "/s" is an operator, "u/s" is not
-
-
-def is_plain_text(query: str) -> bool:
-    return not _OPERATORS.search(query)
-
 
 class RankedSearchEngine:
-    """
-    M1 ranked retrieval layer.
+    """Zone-weighted BM25 search over InvertedIndex."""
 
-    Boolean, phrase and proximity candidate retrieval is delegated
-    to the verified SearchEngine in search.py.
+    _instance = None
 
-    Ranking:
-        - zone-weighted BM25
-        - lnc.ltc cosine baseline
-        - heap-based Top-K
-        - optional year / bench-size filters
-    """
+    def __init__(self, index_dir: Path | str = "data/processed/index"):
+        self.index = InvertedIndex.load(index_dir)
+        self.doc_meta = self.index.doc_meta
+        self.doc_count = len(self.doc_meta)
+        self.all_doc_ids = set(self.doc_meta.keys())
 
-    def __init__(
-        self,
-        index_path: Path = INDEX_PATH,
-        corpus_path: Path = CORPUS_PATH,
-    ):
-        with open(index_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        self.index = data["index"]
-        self.meta = data.get("metadata", {})
-
-        self.doc_count = self.meta.get(
-            "document_count",
-            len(self._all_doc_ids()),
-        )
-
-        self.search_engine = SearchEngine()
-
-        self.docs = {}
-        with open(corpus_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    doc = json.loads(line)
-                    self.docs[doc["doc_id"]] = doc
-
-        self.zone_lengths = {}
-        self.avg_zone_length = {}
-
-        for doc_id, doc in self.docs.items():
-            self.zone_lengths[doc_id] = {}
-
-            for zone in ZONE_WEIGHTS:
-                tokens = doc.get("zone_tokens", {}).get(zone, [])
-                self.zone_lengths[doc_id][zone] = len(tokens)
-
-        for zone in ZONE_WEIGHTS:
-            lengths = [
-                self.zone_lengths[d][zone]
-                for d in self.docs
+        # Compute average zone lengths
+        self.avg_zone_length = {z: 1.0 for z in ZONES}
+        for z in ZONES:
+            lens = [
+                self.index.doc_lengths.get(d, {}).get(z, 0)
+                for d in self.all_doc_ids
             ]
+            self.avg_zone_length[z] = (sum(lens) / len(lens)) if lens else 1.0
 
-            self.avg_zone_length[zone] = (
-                sum(lengths) / len(lengths)
-                if lengths
-                else 1.0
-            )
-
-    # ---------------------------------------------------------
-    # Basic document helpers
-    # ---------------------------------------------------------
-
-    def _all_doc_ids(self):
-        docs = set()
-
-        for posting in self.index.values():
-            docs.update(posting.keys())
-
-        return docs
-
-    def _df(self, term: str) -> int:
-        posting = self.index.get(term)
-
-        if not posting:
-            return 0
-
-        return len(posting)
+    @classmethod
+    def get_instance(cls) -> "RankedSearchEngine":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def _idf(self, term: str) -> float:
-        df = self._df(term)
-
+        df = self.index.df(term)
         if df == 0:
             return 0.0
+        return math.log(1.0 + (self.doc_count - df + 0.5) / (df + 0.5))
 
-        # BM25 Robertson/Sparck Jones IDF.
-        return math.log(
-            1.0 + (self.doc_count - df + 0.5) / (df + 0.5)
-        )
+    # --- AST Candidate Resolution ---
 
-    def _terms_from_query(self, query: str) -> list[str]:
-        """
-        Extract normalized query terms using the same tokenizer
-        used by the corpus.
-        """
-        from .text_tokenizer import tokenize
+    def _get_term_positions(self, term: str, doc_id: str) -> list[int]:
+        return self.index.postings_map.get(term, {}).get(doc_id, {}).get("positions", [])
 
-        return tokenize(query)
-
-    # ---------------------------------------------------------
-    # Candidate retrieval
-    # ---------------------------------------------------------
-
-    def candidate_docs(self, query: str) -> set[str]:
-        """
-        Use the verified Boolean/phrase/proximity engine to obtain
-        the exact candidate set before ranking. A query with no operators is
-        plain text: every document containing any of its terms is a candidate
-        (the Boolean parser would reject adjacent terms such as "BNS 103").
-        """
-        if is_plain_text(query):
-            candidates: set[str] = set()
-            for term in self._terms_from_query(query):
-                candidates.update(self.index.get(term, {}))
-            return candidates
-
-        return set(self.search_engine.search(query))
-
-    # ---------------------------------------------------------
-    # Zone BM25
-    # ---------------------------------------------------------
-
-    def zone_bm25(
-        self,
-        term: str,
-        doc_id: str,
-        zone: str,
-    ) -> float:
-        posting = self.index.get(term, {}).get(doc_id)
-
-        if not posting:
-            return 0.0
-
-        tf = posting.get("zones", {}).get(zone, 0)
-
-        if tf <= 0:
-            return 0.0
-
-        dl = self.zone_lengths[doc_id].get(zone, 0)
-        avgdl = self.avg_zone_length.get(zone, 1.0)
-
-        idf = self._idf(term)
-
-        denominator = (
-            tf
-            + K1
-            * (
-                1.0
-                - B
-                + B * (dl / avgdl)
-            )
-        )
-
-        return idf * (
-            (tf * (K1 + 1.0))
-            / denominator
-        )
-
-    def bm25_score(
-        self,
-        terms: list[str],
-        doc_id: str,
-    ) -> tuple[float, dict[str, float]]:
-        zone_scores = {}
-
-        for zone, weight in ZONE_WEIGHTS.items():
-            score = 0.0
-
-            for term in terms:
-                score += self.zone_bm25(
-                    term,
-                    doc_id,
-                    zone,
-                )
-
-            zone_scores[zone] = score
-
-        total = sum(
-            ZONE_WEIGHTS[z] * zone_scores[z]
-            for z in ZONE_WEIGHTS
-        )
-
-        return total, zone_scores
-
-    # ---------------------------------------------------------
-    # lnc.ltc cosine baseline
-    # ---------------------------------------------------------
-
-    def _document_weight(
-        self,
-        term: str,
-        doc_id: str,
-    ) -> float:
-        """
-        lnc document weight:
-
-            1 + log(tf)
-
-        followed by cosine normalization.
-        """
-        posting = self.index.get(term, {}).get(doc_id)
-
-        if not posting:
-            return 0.0
-
-        tf = posting.get("tf", 0)
-
-        if tf <= 0:
-            return 0.0
-
-        return 1.0 + math.log10(tf)
-
-    def _query_weight(
-        self,
-        term: str,
-    ) -> float:
-        """
-        ltc query weight:
-
-            (1 + log(tf)) * idf
-
-        For the short query representation used here,
-        query tf is normally 1.
-        """
-        return self._idf(term)
-
-    def lnc_ltc_score(
-        self,
-        terms: list[str],
-        doc_id: str,
-    ) -> float:
+    def _match_phrase(self, terms: list[str], doc_id: str) -> bool:
         if not terms:
+            return True
+        first_pos = self._get_term_positions(terms[0], doc_id)
+        if not first_pos:
+            return False
+        for start in first_pos:
+            matched = True
+            for offset, term in enumerate(terms[1:], start=1):
+                pos_set = set(self._get_term_positions(term, doc_id))
+                if (start + offset) not in pos_set:
+                    matched = False
+                    break
+            if matched:
+                return True
+        return False
+
+    def _match_proximity(self, left_docs: set[str], right_docs: set[str], op: str, node: ProximityNode) -> set[str]:
+        candidates = left_docs & right_docs
+        matched = set()
+        left_terms = self._collect_terms(node.left)
+        right_terms = self._collect_terms(node.right)
+
+        max_dist = 5
+        if op.startswith("/") and op[1:].isdigit():
+            max_dist = int(op[1:])
+
+        for doc in candidates:
+            # Check positional distance across all terms
+            l_positions = [p for t in left_terms for p in self._get_term_positions(t, doc)]
+            r_positions = [p for t in right_terms for p in self._get_term_positions(t, doc)]
+            if not l_positions or not r_positions:
+                continue
+
+            found = any(abs(lp - rp) <= max_dist for lp in l_positions for rp in r_positions)
+            if found:
+                matched.add(doc)
+        return matched
+
+    def _eval_ast(self, node: object) -> set[str]:
+        if isinstance(node, TermNode):
+            return set(self.index.postings_map.get(node.term, {}).keys())
+
+        if isinstance(node, PhraseNode):
+            if not node.terms:
+                return set()
+            candidates = set(self.index.postings_map.get(node.terms[0], {}).keys())
+            for t in node.terms[1:]:
+                candidates &= set(self.index.postings_map.get(t, {}).keys())
+            return {d for d in candidates if self._match_phrase(node.terms, d)}
+
+        if isinstance(node, ProximityNode):
+            l_docs = self._eval_ast(node.left)
+            r_docs = self._eval_ast(node.right)
+            return self._match_proximity(l_docs, r_docs, node.operator.lower(), node)
+
+        if isinstance(node, BooleanNode):
+            l_docs = self._eval_ast(node.left)
+            r_docs = self._eval_ast(node.right)
+            return (l_docs & r_docs) if node.operator.upper() == "AND" else (l_docs | r_docs)
+
+        if isinstance(node, NotNode):
+            return self.all_doc_ids - self._eval_ast(node.child)
+
+        return set()
+
+    def _collect_terms(self, node: object) -> list[str]:
+        if isinstance(node, TermNode):
+            return [node.term]
+        if isinstance(node, PhraseNode):
+            return list(node.terms)
+        if isinstance(node, (BooleanNode, ProximityNode)):
+            return self._collect_terms(node.left) + self._collect_terms(node.right)
+        if isinstance(node, NotNode):
+            return self._collect_terms(node.child)
+        return []
+
+    # --- BM25 Scoring ---
+
+    def _zone_bm25(self, term: str, doc_id: str, zone: str) -> float:
+        tf = self.index.postings_map.get(term, {}).get(doc_id, {}).get("zones", {}).get(zone, 0)
+        if tf <= 0:
             return 0.0
 
-        unique_terms = list(dict.fromkeys(terms))
+        dl = self.index.doc_lengths.get(doc_id, {}).get(zone, 0)
+        avgdl = self.avg_zone_length.get(zone, 1.0)
+        idf = self._idf(term)
+        denom = tf + K1 * (1.0 - B + B * (dl / avgdl))
+        return idf * ((tf * (K1 + 1.0)) / denom)
 
-        doc_weights = {
-            term: self._document_weight(term, doc_id)
-            for term in unique_terms
-        }
+    def bm25_score(self, terms: list[str], doc_id: str) -> tuple[float, dict[str, float]]:
+        zone_scores = {}
+        for z in ZONES:
+            z_score = sum(self._zone_bm25(t, doc_id, z) for t in terms)
+            zone_scores[z] = z_score
 
-        query_weights = {
-            term: self._query_weight(term)
-            for term in unique_terms
-        }
+        total_rel = sum(ZONE_WEIGHTS.get(z, 1.0) * zone_scores[z] for z in ZONES)
+        return total_rel, zone_scores
 
-        numerator = sum(
-            doc_weights[t] * query_weights[t]
-            for t in unique_terms
-        )
-
-        doc_norm = math.sqrt(
-            sum(
-                value * value
-                for value in doc_weights.values()
-            )
-        )
-
-        query_norm = math.sqrt(
-            sum(
-                value * value
-                for value in query_weights.values()
-            )
-        )
-
-        if doc_norm == 0.0 or query_norm == 0.0:
-            return 0.0
-
-        return numerator / (
-            doc_norm * query_norm
-        )
-
-    # ---------------------------------------------------------
-    # Filters
-    # ---------------------------------------------------------
-
-    def apply_filters(
-        self,
-        doc_ids: set[str],
-        filters: dict | None,
-    ) -> set[str]:
-
-        if not filters:
-            return doc_ids
-
-        result = set(doc_ids)
-
-        if "year" in filters:
-            year_filter = filters["year"]
-
-            if isinstance(year_filter, int):
-                year_filter = {year_filter}
-
-            year_filter = set(year_filter)
-
-            result = {
-                doc_id
-                for doc_id in result
-                if self._doc_year(doc_id) in year_filter
-            }
-
-        if "min_year" in filters:
-            result = {
-                doc_id
-                for doc_id in result
-                if (self._doc_year(doc_id) or 0) >= filters["min_year"]  # unknown year never satisfies a year bound
-            }
-
-        if "max_year" in filters:
-            result = {
-                doc_id
-                for doc_id in result
-                if self._doc_year(doc_id) is not None
-                and self._doc_year(doc_id) <= filters["max_year"]
-            }
-
-        if "bench_size" in filters:
-            bench = filters["bench_size"]
-
-            if isinstance(bench, int):
-                bench = {bench}
-
-            bench = set(bench)
-
-            result = {
-                doc_id
-                for doc_id in result
-                if self.docs.get(doc_id, {}).get("bench_size")
-                in bench
-            }
-
-        if "min_bench_size" in filters:
-            result = {
-                doc_id
-                for doc_id in result
-                if self.docs.get(doc_id, {}).get("bench_size", 0)
-                >= filters["min_bench_size"]
-            }
-
-        if "max_bench_size" in filters:
-            result = {
-                doc_id
-                for doc_id in result
-                if self.docs.get(doc_id, {}).get("bench_size", 0)
-                <= filters["max_bench_size"]
-            }
-
-        return result
-
-    def _doc_year(self, doc_id: str) -> int | None:
-        doc = self.docs.get(doc_id)
-
-        if not doc:
-            return None
-
-        # The corpus stores dates as "02 January 2025" (the contract says ISO): read the year from either shape.
-        match = re.search(r"\b(1[89]\d\d|20\d\d)\b", str(doc.get("date", "")))
-
-        return int(match.group(1)) if match else None
-
-    # ---------------------------------------------------------
-    # Heap-based Top-K
-    # ---------------------------------------------------------
-
-    def top_k(
-        self,
-        scored_docs: list[tuple[float, str, dict]],
-        k: int,
-    ) -> list[Hit]:
-
-        heap = []
-
-        for score, doc_id, zones in scored_docs:
-
-            item = (score, doc_id, zones)
-
-            if len(heap) < k:
-                heapq.heappush(heap, item)
-
-            elif score > heap[0][0]:
-                heapq.heapreplace(
-                    heap,
-                    item,
-                )
-
-        heap.sort(
-            key=lambda x: (-x[0], x[1])
-        )
-
-        return [
-            Hit(
-                doc_id=doc_id,
-                rel=score,
-                zone_scores=zones,
-            )
-            for score, doc_id, zones in heap
-        ]
-
-    # ---------------------------------------------------------
-    # Public API
-    # ---------------------------------------------------------
-
-    def search(
-        self,
-        query: str,
-        k: int = 100,
-        filters: dict | None = None,
-    ) -> list[Hit]:
-
-        if k <= 0:
+    def search(self, query: str, k: int = 100, filters: dict | None = None) -> list[Hit]:
+        if k <= 0 or not query.strip():
             return []
 
-        candidate_docs = self.candidate_docs(query)
+        try:
+            ast = parse_query(query)
+            candidate_docs = self._eval_ast(ast)
+            terms = list(dict.fromkeys(self._collect_terms(ast)))
+        except ValueError:
+            # Fallback to plain query tokenization on free text
+            terms = list(dict.fromkeys(tokenize(query)))
+            candidate_docs = set()
+            for t in terms:
+                candidate_docs.update(self.index.postings_map.get(t, {}).keys())
 
-        candidate_docs = self.apply_filters(
-            candidate_docs,
-            filters,
-        )
-
-        if not candidate_docs:
-            return []
-
-        terms = self._terms_from_query(query)
-
-        # Deduplicate while preserving order.
-        terms = list(dict.fromkeys(terms))
+        # Parametric filtering
+        if filters:
+            if "year" in filters:
+                y = filters["year"]
+                candidate_docs = {d for d in candidate_docs if self.doc_meta.get(d, {}).get("year") == y}
+            if "bench_size" in filters:
+                bs = filters["bench_size"]
+                candidate_docs = {d for d in candidate_docs if self.doc_meta.get(d, {}).get("bench_size") == bs}
 
         scored = []
-
         for doc_id in candidate_docs:
+            score, zones = self.bm25_score(terms, doc_id)
+            scored.append((score, doc_id, zones))
 
-            score, zones = self.bm25_score(
-                terms,
-                doc_id,
-            )
+        top = heapq.nlargest(k, scored, key=lambda x: x[0])
+        hits = [Hit(doc_id=d, rel=float(s), zone_scores=zs) for s, d, zs in top]
+        for hit in hits:
+            hit.validate()
+        return hits
 
-            scored.append(
-                (score, doc_id, zones)
-            )
-
-        return self.top_k(
-            scored,
-            min(k, len(scored)),
-        )
-
-    # ---------------------------------------------------------
-    # Baseline comparison
-    # ---------------------------------------------------------
-
-    def lnc_ltc_search(
-        self,
-        query: str,
-        k: int = 100,
-        filters: dict | None = None,
-    ) -> list[tuple[str, float]]:
-
-        candidates = self.candidate_docs(query)
-
-        candidates = self.apply_filters(
-            candidates,
-            filters,
-        )
-
-        terms = list(
-            dict.fromkeys(
-                self._terms_from_query(query)
-            )
-        )
-
-        scored = [
-            (
-                self.lnc_ltc_score(
-                    terms,
-                    doc_id,
-                ),
-                doc_id,
-            )
-            for doc_id in candidates
-        ]
-
-        return heapq.nlargest(
-            min(k, len(scored)),
-            scored,
-            key=lambda x: (x[0], x[1]),
-        )
-
-
-# -------------------------------------------------------------
-# Verification / demo
-# -------------------------------------------------------------
-
-if __name__ == "__main__":
-
-    engine = RankedSearchEngine()
-
-    queries = [
-        "ipc",
-        "ipc AND murder",
-        "ipc AND NOT bns",
-        '"common intention"',
-        '"common intention" /s murder',
-        '"common intention" /p murder',
-        '"common intention" /10 murder',
-    ]
-
-    print("\n" + "=" * 70)
-    print("LEXSHIFT RANKED SEARCH TESTS")
-    print("=" * 70)
-
-    for query in queries:
-
-        print(f"\nQUERY: {query}")
-
-        hits = engine.search(
-            query,
-            k=5,
-        )
-
-        print(
-            f"Candidates: "
-            f"{len(engine.candidate_docs(query))}"
-        )
-
-        for i, hit in enumerate(hits, 1):
-            print(
-                f"{i}. "
-                f"{hit.doc_id} "
-                f"score={hit.rel:.4f} "
-                f"zones={hit.zone_scores}"
-            )
-
-    print("\n" + "=" * 70)
-    print("LNC.LTC BASELINE")
-    print("=" * 70)
-
-    query = "ipc AND murder"
-
-    results = engine.lnc_ltc_search(
-        query,
-        k=5,
-    )
-
-    for i, (score, doc_id) in enumerate(
-        results,
-        1,
-    ):
-        print(
-            f"{i}. {doc_id} "
-            f"score={score:.6f}"
-        )
-# Team public API. The engine (about 70 MB of JSON) is built on the first call, not at import, so importing the package is
-# cheap and does not need the index files.
-_engine: RankedSearchEngine | None = None
+    def print_postings_and_scores(self, term: str, top_n: int = 5) -> None:
+        """Helper for demo video to display postings and raw calculations."""
+        print(f"\n--- Video Evidence: Postings & Scores for {term!r} ---")
+        postings = self.index.postings(term)
+        print(f"Document Frequency: {len(postings)}")
+        for doc_id, positions in postings[:top_n]:
+            score, zones = self.bm25_score([term], doc_id)
+            print(f"Doc: {doc_id} | Positions: {positions[:5]} | Raw BM25: {score:.4f} | Zones: {zones}")
 
 
 def search(query: str, k: int = 100, filters: dict | None = None) -> list[Hit]:
-    global _engine
-    if _engine is None:
-        _engine = RankedSearchEngine()
-    return _engine.search(query, k=k, filters=filters)
+    """Team API contract."""
+    engine = RankedSearchEngine.get_instance()
+    return engine.search(query, k=k, filters=filters)

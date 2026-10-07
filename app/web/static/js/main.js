@@ -6,6 +6,7 @@ import { applyParams, focusQuery, initSearch, paramsDiffer } from "./search.js";
 import { initStatus } from "./status.js";
 import { renderEvaluation } from "./evaluation.js";
 import { renderJudging } from "./judging.js";
+import { renderIndexPage } from "./m1.js";
 import { initTooltips } from "./ui.js";
 
 const THEME_KEY = "lexshift.theme";
@@ -34,13 +35,13 @@ function parseHash() {
 
 async function doRoute() {
   const { path, params } = parseHash();
-  const view = path === "/evaluation" ? "evaluation" : path === "/judging" ? "judging" : "search";
+  const view = path === "/evaluation" ? "evaluation" : path === "/judging" ? "judging" : path === "/index" ? "index" : "search";
   const changed = view !== current;
   if (changed) {
     const from = current ? $(`[data-view="${current}"]`) : null;
     const to = $(`[data-view="${view}"]`);
     current = view;
-    document.title = view === "search" ? "LexShift" : `${view === "evaluation" ? "Evaluation" : "Judging"} | LexShift`;
+    document.title = view === "search" ? "LexShift" : `${{ evaluation: "Evaluation", judging: "Judging", index: "Index" }[view]} | LexShift`;
     setNavActive(path === "/method" ? "method" : view, Boolean(from));
     if (!from) { $$("[data-view]").forEach((el) => show(el, el === to)); }
     else await swapView(from, to);
@@ -50,6 +51,7 @@ async function doRoute() {
   }
   if (view === "evaluation") { if (changed) await renderEvaluation(); }
   else if (view === "judging") { if (changed) await renderJudging(); }
+  else if (view === "index") { if (changed) await renderIndexPage(); }
   else {
     if (path === "/method") scrollToTarget("#method", { offset: 70 });
     if (!searchBooted) { searchBooted = true; applyParams(params); }

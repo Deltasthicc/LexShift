@@ -21,7 +21,7 @@ help:
 	@echo "ui               the web interface at http://127.0.0.1:8765 (ARGS='--port 9000 --open')"
 	@echo "docmeta          derive case titles for the demo from judgments.jsonl"
 	@echo "download         M1: fetch the AWS Open Data judgments"
-	@echo "build-index      M1: judgments.jsonl and the search index"
+	@echo "build-index      M1: the search index, from data/processed/judgments.jsonl (once, about 20 s)"
 	@echo "build-statutes   M2: doc_statutes.jsonl"
 	@echo "build-citations  M3: citations.jsonl"
 	@echo "build-health     M3: doc_health.jsonl"
@@ -70,8 +70,9 @@ docmeta:
 download:
 	$(PY) -m m1_index.ingest download
 
+# Only the index is built here. `python -m m1_index.ingest build` is not part of this target: with an empty data/raw it rewrites
+# data/processed/judgments.jsonl with zero records (docs/INTEGRATION_REVIEW.md, M1 finding 13).
 build-index:
-	$(PY) -m m1_index.ingest build
 	$(PY) -m m1_index.index build
 
 build-statutes:

@@ -111,6 +111,7 @@ Linux), then:
 ```bash
 pip install -r requirements.txt
 python -m nltk.downloader stopwords   # once; M1's tokenizer reads this list
+python -m m1_index.index build        # once; M1's search index from data/processed/judgments.jsonl (about 20 seconds, 2.6 MB, git-ignored)
 python -m pytest            # unit tests
 python eval/smoke.py        # contract + end-to-end check; the merge gate for main
 ```
@@ -135,7 +136,7 @@ such as `search,health`.
 | Make target | Command | Module |
 |---|---|---|
 | `make download` | `python -m m1_index.ingest download` | M1 |
-| `make build-index` | `python -m m1_index.ingest build` then `python -m m1_index.index build` | M1 |
+| `make build-index` | `python -m m1_index.index build` (not `ingest build`: with an empty `data/raw` it empties `judgments.jsonl`) | M1 |
 | `make build-statutes` | `python -m m2_statute.extractor build` | M2 |
 | `make build-citations` | `python -m m3_treatment.citations build` | M3 |
 | `make build-health` | `python -m m3_treatment.scores build` | M3 |
@@ -148,6 +149,7 @@ such as `search,health`.
 | `make feasibility` | `python -m eval.feasibility` | M4 |
 | `make ui` | `python -m app.server` | M4 |
 | `make final-check` | `python -m eval.submission_check` | M4 |
+| the Index page | `python -m app.server`, then `#/index` | M1's pipeline explained live against the real index (read-only) |
 | `make figures` | `python -m eval.figures` | M4 |
 | `make conformance` | `python -m eval.conformance` | all |
 
@@ -268,8 +270,8 @@ This table is the honest state of the project; each owner updates their row when
 | Module | State on `main` |
 |---|---|
 | Shared contracts, config, stubs, smoke test | **Done**, with unit tests |
-| M1 corpus, index and `search()` | **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked. **Not done:** the corpus cannot be rebuilt (`ingest.py` and `index.py` are skeletons), `judgments.jsonl` still breaks the `Judgment` contract in 27 of 200 records (`bench_size` 0; the dates are ISO now), and the tokenised copy keeps the old dates, no tests; so `stubs.search` stays `true`. Needs older judgments in the sample |
-| M2 statute layer | **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
+| M1 corpus, index and `search()` | **Updated 2026-10-07:** `judgments.jsonl` is contract-valid (ISO dates, `bench_size` null instead of 0), the zone, parser and index problems are fixed, and the index is rebuilt with `python -m m1_index.index build` (2.6 MB). Still open: `ingest build` empties the corpus when `data/raw` is empty and nothing downloads the data, 3-judge benches are recorded wrongly, the working-directory-relative index path, lnc.ltc and query optimisation are not implemented. Earlier status, kept for the record: **Search works** on a committed 200-judgment sample (all from 2025): Boolean, phrase, proximity and zone-weighted BM25 are correct, and free text is ranked; so `stubs.search` stays `true` until the open items above are closed. Needs older judgments in the sample |
+| M2 statute layer | **Updated 2026-10-07:** much better extraction (2,755 references, 6 of 9 statute forms, bare numbers resolved by date, 20 mapped offences) but **`data/statute_map.csv` is malformed, so the real `continuity()` raises and `main` fails the smoke gate**, and `BNS 103` on its own is not read. Earlier status, kept for the record: **Minimal version**: reads `IPC 302` and `Section 103 of the BNS`, maps one section (IPC 302 to BNS 103). Misses most statute forms and reads paragraph numbers as sections; bare numbers are not resolved from the offence date; `stubs.statute` stays `true` until `doc_statutes.jsonl` is committed |
 | M3 citations and treatment | **Code built and tested** (citation extractor and resolver, windows and appeal-history filter, Gemini and tf-idf classifiers, bench check, PageRank, real `health()` and `authority()`, gold-set tooling), its review fixes (cache key, gold merge, same parties, data checks) are merged and were re-verified; run end to end on 203 real judgments (a stand-in labeller, since there are no Gemini labels or gold set yet) and checked against M4's `rank()` and demo: Koushal comes out overruled by the 5-judge Navtej bench. **Not done:** the real labelling run, the gold set, the F1 table, a built `doc_health.jsonl` for the corpus; so `stubs.health` and `stubs.authority` stay `true` |
 | M4 `rank()`, evaluation, demo | `rank()` (normalisation, weighted fusion, heap top-K, explanations), the metrics, the ablation and dev-only tuning runner, the pooling and two-judge qrels tools, the data checker, the feasibility counter, the CLI demo and the web interface (search, compare, evidence, status, evaluation and a blind judging workbench) are implemented and unit-tested against fixtures and the stubs, and the interface was checked in a browser on the 200-judgment sample; the report skeleton and a prose draft, the pipeline diagram (`python -m eval.figures`), the video script and the submission checklist are written, and `python -m eval.submission_check` audits the checklist's machine-checkable items (branch `m4-rank`; skeleton only on `main` until it is merged). What remains for M4 is data that only people can make: the judged queries, the two judges' grades and the gold overruling list, then tuning on dev and the test table, the report PDF and the video |
 | Judged queries and qrels | **Not written yet: they are made by hand.** Candidate queries, query-specific grading criteria, the worksheet and the tooling are ready ([eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md)). `python -m eval.feasibility` shows that the current 200-judgment sample (all 2025) cannot support the plan: of the 30 candidates 3 are answerable, 17 thin and 10 empty, so the corpus has to grow first |
@@ -295,6 +297,7 @@ hand-computed values on small synthetic fixtures; they say nothing about how wel
 | [eval/JUDGING_GUIDE.md](eval/JUDGING_GUIDE.md) | Writing the queries and grades by hand: worksheet, grading rules and worked examples, the workbench, the pooling and qrels tools |
 | [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | What to tick before submitting; `python -m eval.submission_check` checks the machine-checkable items |
 | [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md), [docs/REPORT_DRAFT.md](docs/REPORT_DRAFT.md) | The report's structure, and the prose that can be written before the evaluation exists (every result is a `<FILL>` from a file) |
+| [docs/DEMO_M4.md](docs/DEMO_M4.md) | M4's 90-second demo: what to show, what to say, and what to do when a module is not ready |
 | [docs/VIDEO_SCRIPT.md](docs/VIDEO_SCRIPT.md) | The demo video, segment by segment, with the live commands |
 | [docs/INTEGRATION_REVIEW.md](docs/INTEGRATION_REVIEW.md) | The four modules run together on real judgments: findings per module and what to send each owner |
 | [docs/REPORT_SKELETON.md](docs/REPORT_SKELETON.md) | The 8-page report, section by section, with where each number comes from |

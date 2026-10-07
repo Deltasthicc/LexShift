@@ -158,7 +158,23 @@ def check_m1_data(rep: Report, cfg: dict[str, Any]) -> list[dict]:
 
     idx_dir = _path("index_dir", cfg)
     tokenized = idx_dir / "tokenized_judgments.jsonl"
-    if tokenized.exists():
+    live = idx_dir / "index.pkl.gz"  # what M1's search() loads
+    if live.exists():
+        try:
+            from m1_index.index import InvertedIndex
+
+            live_ids = set(InvertedIndex.load(idx_dir).doc_meta)
+            same = live_ids == set(ids)
+            rep.add("M1", "PASS" if same else "FAIL", "the search index (index.pkl.gz) and judgments.jsonl cover the same documents",
+                    f"index {len(live_ids)}, corpus {len(set(ids))}" + ("" if same else f"; only in index {len(live_ids - set(ids))}, only in corpus {len(set(ids) - live_ids)}; rebuild: python -m m1_index.index build"))
+        except Exception as exc:  # noqa: BLE001 - any failure to load is itself the finding
+            rep.add("M1", "FAIL", "the search index (index.pkl.gz) cannot be loaded", f"{type(exc).__name__}: {str(exc)[:200]}")
+        stale = [p.name for p in (idx_dir / "inverted_index.json", tokenized) if p.exists()]
+        if stale:
+            rep.add("M1", "WARN", "old index files are still in the folder", f"{', '.join(stale)} are no longer read by search(); delete them and stop tracking them")
+    elif not tokenized.exists():
+        rep.add("M1", "FAIL", "the search index is not built", "search() needs data/processed/index/index.pkl.gz: run python -m m1_index.index build")
+    if not live.exists() and tokenized.exists():
         tok_ids = {r["doc_id"] for r in read_jsonl(tokenized)}
         same = tok_ids == set(ids)
         rep.add("M1", "PASS" if same else "FAIL", "the index and judgments.jsonl cover the same documents",
@@ -244,10 +260,28 @@ REQUIRED_FORMS: list[tuple[str, set[tuple[str, str]]]] = [
 def check_m2_data(rep: Report, cfg: dict[str, Any], recs: list[dict]) -> None:
     from common.io import read_delimited
 
+    from common.schema import STATUTE_MAP_COLUMNS
+
     map_path = _path("statute_map", cfg)
     rows = read_delimited(map_path) if map_path.exists() else []
+    problem = None
+    if rows:
+        # a hostile or half-edited file is a finding, not a crash: check the header, then every row (the line number is the file's)
+        if tuple(rows[0]) != STATUTE_MAP_COLUMNS:
+            problem = f"header is {tuple(rows[0])}, the contract says {STATUTE_MAP_COLUMNS}"
+        else:
+            for n, r in enumerate(rows, start=2):
+                try:
+                    float(r["weight"])
+                except (TypeError, ValueError):
+                    problem = f"line {n}: weight {r.get('weight')!r} is not a number (a second header row pasted into the data?)"
+                    break
+    if problem:
+        rep.add("M2", "FAIL", "statute_map.csv matches the contract", f"{problem}. M2's load_map() stops here, so continuity() raises for any query that names a statute")
+        rows = []
     lo, hi = PLAN_MAP_ROWS
-    rep.add("M2", "PASS" if len(rows) >= lo else "WARN", f"statute_map.csv has the planned {lo}-{hi} mapped sections", f"{len(rows)} rows")
+    if not problem:
+        rep.add("M2", "PASS" if len(rows) >= lo else "WARN", f"statute_map.csv has the planned {lo}-{hi} mapped sections", f"{len(rows)} rows")
     if rows:
         weights = cfg["m2_statute"]["relation_weights"]
         off = [r["relation"] for r in rows if abs(float(r["weight"]) - weights.get(r["relation"], -1)) > 1e-9]
