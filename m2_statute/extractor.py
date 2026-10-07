@@ -13,14 +13,14 @@ from m2_statute.mapping import REPO_ROOT, load_config
 # --- Regex Engine ---
 _PREFIX = r"(?:Sections?|u/s|S\.|Sec\.?)"
 _ACT_PART = r"(IPC|I\.P\.C\.|Indian\s+Penal\s+Code|BNS|Bharatiya\s+Nyaya\s+Sanhita|CrPC|Cr\.P\.C\.|Code\s+of\s+Criminal\s+Procedure|BNSS|Bharatiya\s+Nagarik\s+Suraksha\s+Sanhita|the\s+Code)"
-_SEC_TOK = r"\d+[A-Za-z\-]*"
+_SEC_TOK = r"\d+[A-Za-z\-]*(?:\([a-zA-Z0-9]+\))?"
 _SEP = r"(?:\s*(?:,|/|and|r/w|read\s+with|&)\s*)"
 _SEC_LIST = rf"({_SEC_TOK}(?:{_SEP}{_SEC_TOK})*)"
 
 # A: u/s 302 IPC (Prefix -> Sections -> Act)
 _PAT_A = rf"\b{_PREFIX}\s+{_SEC_LIST}\s*(?:of\s+(?:the\s+)?)?{_ACT_PART}\b"
 # B: IPC u/s 302 (Act -> Prefix -> Sections)
-_PAT_B = rf"\b{_ACT_PART}\s+(?:of\s+(?:the\s+)?)?{_PREFIX}\s+{_SEC_LIST}\b"
+_PAT_B = rf"\b{_ACT_PART}\s+(?:(?:of\s+(?:the\s+)?)?{_PREFIX}\s+)?{_SEC_LIST}\b"
 # C: u/s 302 (Bare Section - Date Resolved)
 _PAT_C = rf"\b{_PREFIX}\s+{_SEC_LIST}\b"
 
@@ -54,7 +54,7 @@ def normalize_act(act_str: str, j_date: str) -> str:
     if "BNS" in a and "BNSS" not in a: return "BNS"
     if "BNSS" in a or "NAGARIK" in a: return "BNSS"
     if "IPC" in a or "PENAL" in a: return "IPC"
-    if "CRPC" in a or "CR.P.C" in a or "PROCEDURE" in a: return "CRPC"
+    if "CRPC" in a or "CR.P.C" in a or "CR.P.C." in a or "PROCEDURE" in a: return "CRPC"
     
     if "CODE" in a:
         try:
@@ -84,7 +84,7 @@ def extract_refs(text: str, j_date: str) -> list[StatuteRef]:
             sec_str, act_str = m.group(5), None
 
         secs = parse_sections(sec_str)
-        act = normalize_act(act_str, j_date) if act_str else ("BNS" if is_new else "IPC")
+        act = normalize_act(act_str, j_date) if act_str else "UNKNOWN"
 
         for s in secs:
             key = (act, s)

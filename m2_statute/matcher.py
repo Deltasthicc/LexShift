@@ -1,7 +1,7 @@
 """continuity(): matches query statutes against extracted document statutes."""
 
 from __future__ import annotations
-
+NOT_FOUND_EXPLANATION = "Document not found or no statutes extracted"
 import json
 import logging
 import os
@@ -84,7 +84,7 @@ def continuity(qs: QueryStatutes, doc_id: str) -> tuple[float, str]:
     # Strict contract: raise KeyError if document is utterly absent
     if doc_id not in doc_refs:
         MISSING_DOC_IDS.add(doc_id)
-        raise KeyError(f"continuity(): Unknown judgment ID: {doc_id}")
+        return 0.0, NOT_FOUND_EXPLANATION
 
     # Strict contract: 0.0 if document exists but lacks references
     if not doc_refs[doc_id]:
