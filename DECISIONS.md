@@ -179,7 +179,7 @@ parallel edges by taking the largest weight, so a case mentioned 20 times does n
 headers, the judgment's own citation) are dropped. Mentions outside the LLM scope (unresolved, or appeal history) get
 `label = neutral`, `confidence = 0.0`. Confidence 0 means "not classified": such a record has no corpus target, or is a
 reversal on appeal, so it can never change health or authority. Windows given to a classifier or a labeller mark the
-cited case with `[[ ]]`. citations.jsonl stores the window without the markers.
+cited case with `[[ ]]`. citations.jsonl now keeps the markers too (D-033).
 
 ### D-018 (2026-10-06) Short-form mentions are linked to the case they refer to
 Indian judgments usually treat a case through a short form: in Navtej Johar the overruling sentence is
@@ -430,6 +430,60 @@ frame rate on the owner's machine (the pane throttles animation frames, so timin
   GSAP's ticker; frame rate on a real machine was not measured.
 * **The request tracker** (docs/INTEGRATION_REVIEW.md) lists, per module, what was asked and what the pushed code does today.
 
+### D-033 (2026-10-07) M3 fixes from the integration review (docs/INTEGRATION_REVIEW.md on m4-rank, M3 findings 5-10)
+Measured on M1's 200 judgments of 2025 (on `main`) and on a 203-judgment test corpus (those 200 plus Koushal, Navtej
+Johar and Joseph Shine downloaded from the public bucket). Treatment labels in the test run came from a keyword stand-in
+kept outside the repo, used only to exercise the pipeline; they are not results.
+* **Resolver and bench sizes.** `resolver.py` is taken unchanged from m4-rank (D-026: doc_ids with a language suffix such
+  as `_EN`, dates in any shape, mixed-case coram lines), and `bench_of` now prefers the coram line to M1's `bench_size`.
+  On M1's corpus the coram line is readable for all 200 judgments; it agrees with `bench_size` wherever both are known,
+  except 7 three-judge benches stored as 2 (M1's `judges` keeps "Vikram Nath, Sanjay Karol" as one name), and it fills
+  the 27 unknown sizes (21 three-judge and one five-judge bench in all). Before: doc_ids in the dataset form 0 of 200,
+  bench known 173 of 200; after: 200 of 200 for both.
+* **Running headers (finding 10).** A name-only, unresolved mention is a self-reference when every distinctive token of the
+  title's private side (not a government word, not a common name, not frequent in the corpus) occurs in it, and its other
+  side opens with a word of the title or its initials (`windows.is_own_title`). This catches headers that are truncated
+  ("Sudershan Singh Wazir v. State"), abbreviated ("NAVTEJ SINGH JOHAR v. UOI THR. SECY") or glued to the next words
+  ("Mahabir & Ors. v. State of Haryana Code of Criminal Procedure"). Appeal-history tags on M1's corpus: 477 before,
+  58 after (on the test corpus 665 before, 63 after). I read all 224 distinct (judgment, name) pairs then treated as
+  self-references in the test corpus: one was a different case ("Sanjay v. Union of India" in "Sanjay v. State of
+  U.P."), which the other-side test now keeps.
+* **Appeal history for non-Supreme-Court decisions (finding 7).** "set aside", "reversed", "quashed" or "impugned" must
+  occur in the mention's own sentence within 250 characters of it (`windows.appeal_context`), not anywhere in the
+  window: the next sentence's "the judgment of the High Court is set aside" is this Court's order on the appeal.
+* **Evidence choice (finding 5).** `extract` records `in_headnote` per mention: whether it lies before the jurisdiction
+  line ("CRIMINAL ORIGINAL JURISDICTION", "Case Arising From CRIMINAL APPELLATE JURISDICTION") where the reporter's
+  headnote and its "Case Law Cited" list end (`text.body_start`). Evidence sorts a headnote mention after a reasoning
+  mention of the same strength, and each evidence item carries `in_headnote` (true, false, or null when
+  `m3_mentions.jsonl` is missing). On Navtej, the 14 Koushal windows the stand-in labelled overruled split into 7
+  headnote lines (including the one after Shayara Bano that the review flagged) and 7 reasoning sentences; the evidence
+  is now a reasoning sentence. The health score is unchanged: a headnote line still counts as a treatment.
+* **The marker (finding 8).** `citations.jsonl` keeps `[[ ]]` around the cited mention in `window` (and so in the
+  evidence `sentence`), so a reader can find the treating sentence; strip `[[`/`]]` before searching the judgment text.
+  This replaces the last sentence of D-017.
+* **Names (finding 6).** A name restarts after a lower-case "in"/"since" or "Cited" ("A Constitution Bench in Bachan
+  Singh v. ..." gives "Bachan Singh v. ..."). The respondent side stops at a heading or running-text word (Code, Writ,
+  Petition, List, Although, Section, ...), after "& Ors." / "& Anr.", and at a lower-case "the" that does not follow
+  "of"/"by"/"through". Margin letters on the edge of a text line ("Reserve Bank of \nC India") are dropped in
+  `clean_text`; a letter in mid-line is an initial ("Aparna A Shah") and stays. On the test corpus (all name and full
+  mentions): a lead-in such as "Court in" 55 to 0; a heading word after the respondent 30 to 0; a lower-case "the" on
+  the respondent side 60 to 28, most of which are real ("State Represented by the Inspector of Police"), a few still
+  run on ("State of Bihar of the PW-20"). Known limit: a capitalised word after a name still joins it.
+* **Memory and errors (finding 9).** `run_health` streams citations.jsonl and keeps only resolved, non-appeal records (the
+  unresolved 98% are dropped as read) and writes doc_health.jsonl as it goes. It warns when citations.jsonl names
+  judgments that are not in judgments.jsonl (it was built from another corpus): rebuild citations and health whenever
+  M1 rebuilds. Pipeline and `gold sample` commands print one `error:` line instead of a traceback when an input is
+  missing; `gold merge` reads sheets saved by Excel as "CSV UTF-8" (byte-order mark); `python -m m3_treatment.scores`
+  no longer triggers runpy's double-import warning (the package imports `scores` on first use).
+* **Pinned model (finding 9).** `gemini_caller` refuses a moving alias or preview id (`*-latest`, `*-preview`, `*-exp`),
+  and each cache row records the `model_version` that answered. The configured id stays `gemini-2.5-flash`, a stable
+  id that Google does not re-point. Google's model page (read 2026-10-07) says 2.5 access is now limited to projects that
+  used it before and recommends temperature 1.0 for Gemini 3. If the key is refused, set `llm.model` to a stable
+  Gemini 3 id and `llm.temperature: 1.0`; the cache key includes the model, so nothing stale is reused.
+* **The label cache is committed (closes OQ-5).** It moved from the git-ignored `data/cache/` to
+  `data/llm_labels/m3_llm_labels.jsonl`. It is small (hash keys and labels, no judgment text), and with it anyone can
+  rebuild `citations.jsonl` and `doc_health.jsonl` offline, without an API key, which is the frozen-output rule.
+
 ## Open questions
 
 * **OQ-1** How is the 200-document sample shared with the team (committed under `data/sample/`, a release asset, or a shared
@@ -441,7 +495,6 @@ frame rate on the owner's machine (the pane throttles animation frames, so timin
 * **OQ-4** Whether a larger-bench reference or a stayed provision should show as its own treatment state in the demo (for
   example sedition, where the operation of the section was stayed rather than struck down). Needed for the limitation segment
   of the video; verify the facts against the orders first.
-* **OQ-5** How the frozen M3 outputs reach the team and CI. The Gemini cache (`data/cache/`) and `data/processed/` are
-  git-ignored, but `stubs.health` and `stubs.authority` can only be flipped to `false` once smoke (and CI) can read
-  `doc_health.jsonl`. Options: commit the LLM cache (small text, makes rebuilds free) or ship `doc_health.jsonl` with
-  M1's sample (OQ-1). M3 proposes committing the cache.
+* **OQ-5** Closed by D-033: the LLM label cache is committed (`data/llm_labels/`), so `citations.jsonl` and
+  `doc_health.jsonl` rebuild offline from M1's corpus. Still open: how CI reads `doc_health.jsonl` (ship it with M1's
+  sample, OQ-1, or rebuild it in CI from the committed cache).

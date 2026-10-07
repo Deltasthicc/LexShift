@@ -26,7 +26,7 @@ Items marked **proposed** were not fixed by the Guide; they are v0.1 proposals (
 | `data/processed/judgments.jsonl` | M1 | `doc_id`, `title`, `date`, `bench_size`, `judges[]`, `reporter_citations[]`, `zones{headnote, facts, arguments, holding}`, `text` |
 | `data/statute_map.csv` | M2 | `old_act`, `old_section`, `new_act`, `new_section`, `relation`, `weight`, `source`, `note` |
 | `data/processed/doc_statutes.jsonl` | M2 | `doc_id`, `refs[{act, section, offence_id, count, zone}]` |
-| `data/processed/citations.jsonl` | M3 | `citing_doc`, `cited_doc` (null if unresolved), `cited_raw`, `window`, `is_appeal_history`, `label`, `confidence`, `citing_bench`, `cited_bench`, `valid_negative` |
+| `data/processed/citations.jsonl` | M3 | `citing_doc`, `cited_doc` (null if unresolved), `cited_raw`, `window` (the cited mention inside `[[ ]]`), `is_appeal_history`, `label`, `confidence`, `citing_bench`, `cited_bench`, `valid_negative` |
 | `data/processed/doc_health.jsonl` | M3 | `doc_id`, `health`, `authority`, `evidence[{citing_doc, label, sentence}]` |
 | `data/treatment_gold.csv` | M3 | `window_id`, `window`, `gold_label`, `labeller` |
 | `eval/queries.jsonl` | M4 | `qid`, `text`, `offence_date`, `split` (dev or test), `type` (A to D) |

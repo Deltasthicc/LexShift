@@ -35,13 +35,12 @@ from m3_treatment.classifier import (
     gemini_caller,
     per_class_report,
     shots_fingerprint,
-    unmark,
     valid_negative,
 )
 from m3_treatment.graph import authority_scores, pagerank_raw
 from m3_treatment.resolver import CorpusIndex, bench_of, metadata_view
-from m3_treatment.text import clean_text, jaccard, party_tokens, sentence_spans
-from m3_treatment.windows import is_appeal_history, marked_window
+from m3_treatment.text import body_start, clean_text, sentence_spans
+from m3_treatment.windows import appeal_context, is_appeal_history, is_own_title, marked_window
 
 
 def cfg() -> dict:
@@ -68,12 +67,6 @@ def _report_dir() -> Path:
 # ----------------------------------------------------------------------------------------------------------------
 # extract
 # ----------------------------------------------------------------------------------------------------------------
-def _same_title(a: str, b: str) -> bool:
-    """The judgment's own title (a running header): nearly all party tokens identical."""
-    ta, tb = party_tokens(a), party_tokens(b)
-    return bool(ta and tb) and jaccard(ta, tb) >= 0.8
-
-
 def mention_records(rec: dict, index: CorpusIndex, wcfg: dict) -> list[dict]:
     """Every mention in one judgment, resolved, windowed and appeal-checked (no label yet)."""
     citing = rec["doc_id"]
@@ -84,6 +77,7 @@ def mention_records(rec: dict, index: CorpusIndex, wcfg: dict) -> list[dict]:
     mentions = extract_mentions(text)
     citing_title = rec.get("title", "")
     citing_bench = bench_of(rec)
+    headnote_end = body_start(text)
     out = []
     for i, m in enumerate(mentions):
         src = mentions[m.antecedent] if m.antecedent is not None else m
@@ -91,9 +85,12 @@ def mention_records(rec: dict, index: CorpusIndex, wcfg: dict) -> list[dict]:
         cited_doc = res.doc_id
         cited_title = index.meta[cited_doc].title if cited_doc else src.name
         # A running header repeats the judgment's own title; it is a self-reference, not a citation.
-        is_self = cited_doc == citing or (cited_doc is None and not src.cites and _same_title(citing_title, src.name))
+        is_self = cited_doc == citing or (
+            cited_doc is None and not src.cites and is_own_title(citing_title, src.name, index.stopwords)
+        )
         is_sc = bool(cited_doc) or any(c.is_sc for c in src.cites) or not src.cites
         window = marked_window(text, m.start, m.end, wcfg["before"], wcfg["after"], wcfg["max_chars"], spans)
+        context = appeal_context(text, m.start, m.end, spans)
         out.append(
             {
                 "citing_doc": citing,
@@ -108,7 +105,8 @@ def mention_records(rec: dict, index: CorpusIndex, wcfg: dict) -> list[dict]:
                 "marked_window": window,
                 "is_self": is_self,
                 "is_appeal_history": (not is_self)
-                and is_appeal_history(unmark(window), citing_title, cited_title, cited_is_sc=is_sc, common=index.stopwords),
+                and is_appeal_history(context, citing_title, cited_title, cited_is_sc=is_sc, common=index.stopwords),
+                "in_headnote": m.start < headnote_end,
                 "citing_bench": citing_bench,
                 "cited_bench": index.meta[cited_doc].bench if cited_doc else None,
                 "antecedent_kind": src.kind if m.antecedent is not None else None,
@@ -289,7 +287,7 @@ def run_label_llm(limit: int | None = None, dry_run: bool = False, call=None) ->
     labeller = LLMLabeller(
         cache,
         c["model"],
-        call or gemini_caller(c["model"]),
+        call or gemini_caller(c["model"], c.get("temperature", 0.0)),
         examples=examples,
         batch_size=c["batch_size"],
         min_interval_s=c["min_interval_s"],
@@ -400,6 +398,7 @@ def run_citations(labels: str | None = None) -> dict:
 
     Mentions outside the LLM scope (unresolved, appeal history) are labelled `neutral` with confidence 0.0, which
     means "not classified": they cannot move any score (no corpus target, or a reversal on appeal).
+    `window` keeps the [[ ]] around the cited mention, so a reader (and the demo) can find the treating sentence.
     """
     c = cfg()
     labels = labels or c["labels"]
@@ -438,7 +437,7 @@ def run_citations(labels: str | None = None) -> dict:
             citing_doc=m["citing_doc"],
             cited_doc=m["cited_doc"],
             cited_raw=m["cited_raw"],
-            window=unmark(m["marked_window"]),
+            window=m["marked_window"],
             is_appeal_history=m["is_appeal_history"],
             label=label,
             confidence=round(conf, 4),
@@ -460,22 +459,63 @@ def _strength(label: str, values: dict) -> float:
     return values.get(label, values["default"])
 
 
+def _headnote_flags(keys: set[tuple[str, str]]) -> dict[tuple[str, str], bool] | None:
+    """(citing_doc, marked window) -> whether that mention sits in the reporter's headnote, from m3_mentions.jsonl.
+
+    Streams the mentions file and keeps only the asked-for keys. None when the file is missing (no preference then).
+    """
+    path = _path("mentions")
+    if not path.exists():
+        return None
+    flags: dict[tuple[str, str], bool] = {}
+    for m in read_jsonl(path):
+        key = (m["citing_doc"], m["marked_window"])
+        if key in keys:
+            flags[key] = flags.get(key, False) or bool(m.get("in_headnote"))
+    return flags
+
+
 def run_health() -> dict:
-    """doc_health.jsonl for EVERY judgment in the corpus: health, authority and the evidence behind them."""
+    """doc_health.jsonl for EVERY judgment in the corpus: health, authority and the evidence behind them.
+
+    citations.jsonl is streamed: only resolved, non-appeal records are kept, and of those only the PageRank edge
+    (three fields) or, for the few candidate evidence items, the record itself. Evidence prefers the court's reasoning
+    to the reporter's headnote: for Koushal, Navtej's "Suresh Kumar Koushal (supra) ... is hereby, overruled" rather
+    than the "Case Law Cited" line "... [2013] 17 SCR 1019 - overruled".
+    """
     c = cfg()
     values = c["health_values"]
     min_conf = c["min_confidence"]
     acfg = c["authority"]
+    for key, hint in (("judgments", "M1 ships judgments.jsonl"), ("citations", "run `python -m m3_treatment.citations build` first")):
+        if not resolve_path(key).exists():
+            raise FileNotFoundError(f"{resolve_path(key)} not found; {hint}")
     benches: dict[str, int | None] = {}
     for rec in read_jsonl(resolve_path("judgments")):
         benches[rec["doc_id"]] = bench_of(rec)
-    cits = [Citation.from_dict(r) for r in read_jsonl(resolve_path("citations"))]
 
-    edges = [
-        (r.citing_doc, r.cited_doc, r.confidence)
-        for r in cits
-        if r.cited_doc and not r.is_appeal_history and r.label in acfg["edge_labels"] and r.confidence > 0
-    ]
+    edges: list[tuple[str, str, float]] = []
+    negatives: dict[str, list] = defaultdict(list)
+    positives: dict[str, list] = defaultdict(list)
+    why_not = Counter()  # negative labels that do not lower health, by reason
+    outside = Counter()  # doc ids in citations.jsonl that are not in judgments.jsonl (stale build)
+    for raw in read_jsonl(resolve_path("citations")):
+        r = Citation.from_dict(raw)
+        outside["citing"] += r.citing_doc not in benches
+        if not r.cited_doc or r.is_appeal_history:
+            continue
+        if r.cited_doc not in benches:
+            outside["cited"] += 1
+            continue
+        if r.label in NEGATIVE_LABELS and not r.valid_negative:
+            why_not["unknown bench" if r.citing_bench is None or r.cited_bench is None else "smaller citing bench"] += 1
+        if r.label in acfg["edge_labels"] and r.confidence > 0:
+            edges.append((r.citing_doc, r.cited_doc, r.confidence))
+        if r.valid_negative and r.confidence >= min_conf:
+            negatives[r.cited_doc].append(r)
+        elif r.label == "followed" and r.confidence >= min_conf:
+            positives[r.cited_doc].append(r)
+
     pr = pagerank_raw(edges, nodes=benches, damping=c["pagerank"]["damping"], tol=c["pagerank"]["tol"], max_iter=c["pagerank"]["max_iter"])
     auth = authority_scores(pr, benches, acfg["max_bench"], acfg["unknown_bench"])
 
@@ -485,43 +525,52 @@ def run_health() -> dict:
         for rec in read_jsonl(statutes):
             offences[rec["doc_id"]] = sorted({r["offence_id"] for r in rec.get("refs", []) if r.get("offence_id")})
 
-    negatives: dict[str, list] = defaultdict(list)
-    positives: dict[str, list] = defaultdict(list)
-    why_not = Counter()  # negative labels that do not lower health, by reason
-    for r in cits:
-        if r.cited_doc and not r.is_appeal_history and r.label in NEGATIVE_LABELS and not r.valid_negative:
-            why_not["unknown bench" if r.citing_bench is None or r.cited_bench is None else "smaller citing bench"] += 1
-        if not r.cited_doc or r.is_appeal_history:
-            continue
-        if r.valid_negative and r.confidence >= min_conf:
-            negatives[r.cited_doc].append(r)
-        elif r.label == "followed" and r.confidence >= min_conf:
-            positives[r.cited_doc].append(r)
+    candidates = [r for group in (negatives, positives) for rs in group.values() for r in rs]
+    headnote = _headnote_flags({(r.citing_doc, r.window) for r in candidates})
+    in_headnote = lambda r: None if headnote is None else headnote.get((r.citing_doc, r.window))  # noqa: E731
+    reporter_last = lambda r: in_headnote(r) is True  # noqa: E731  (unknown counts as reasoning)
 
-    out = []
     flagged = Counter()
-    for doc_id in benches:
-        negs = sorted(negatives.get(doc_id, []), key=lambda r: (_strength(r.label, values), -r.confidence, r.citing_doc))
-        health = min([_strength(r.label, values) for r in negs], default=values["default"])
-        # one evidence item per citing judgment, strongest first, then a few positive treatments for context
-        evidence, seen = [], set()
-        for r in negs + sorted(positives.get(doc_id, []), key=lambda r: (-(r.citing_bench or 0), -r.confidence, r.citing_doc)):
-            if (r.citing_doc, r.label) in seen:
-                continue
-            seen.add((r.citing_doc, r.label))
-            item = {"citing_doc": r.citing_doc, "label": r.label, "sentence": r.window, "confidence": r.confidence, "citing_bench": r.citing_bench}
-            if r.label in NEGATIVE_LABELS:
-                item["offence_ids"] = offences.get(r.citing_doc, [])  # [] = unknown: the penalty always applies
-            evidence.append(item)
-            if len(evidence) >= c["max_evidence"]:
-                break
-        if negs:
-            flagged[negs[0].label] += 1
-        rec = DocHealth(doc_id=doc_id, health=round(health, 4), authority=round(auth.get(doc_id, 0.0), 6), evidence=evidence)
-        rec.validate()
-        out.append(rec.to_dict())
-    n = write_jsonl(resolve_path("doc_health"), out)
+
+    def records():
+        for doc_id in benches:
+            negs = sorted(negatives.get(doc_id, []), key=lambda r: (_strength(r.label, values), reporter_last(r), -r.confidence, r.citing_doc))
+            pos = sorted(positives.get(doc_id, []), key=lambda r: (reporter_last(r), -(r.citing_bench or 0), -r.confidence, r.citing_doc))
+            health = min([_strength(r.label, values) for r in negs], default=values["default"])
+            # one evidence item per (citing judgment, label), strongest first, then a few positive treatments for context
+            evidence, seen = [], set()
+            for r in negs + pos:
+                if (r.citing_doc, r.label) in seen:
+                    continue
+                seen.add((r.citing_doc, r.label))
+                item = {
+                    "citing_doc": r.citing_doc,
+                    "label": r.label,
+                    "sentence": r.window,
+                    "confidence": r.confidence,
+                    "citing_bench": r.citing_bench,
+                    "in_headnote": in_headnote(r),
+                }
+                if r.label in NEGATIVE_LABELS:
+                    item["offence_ids"] = offences.get(r.citing_doc, [])  # [] = unknown: the penalty always applies
+                evidence.append(item)
+                if len(evidence) >= c["max_evidence"]:
+                    break
+            if negs:
+                flagged[negs[0].label] += 1
+            rec = DocHealth(doc_id=doc_id, health=round(health, 4), authority=round(auth.get(doc_id, 0.0), 6), evidence=evidence)
+            rec.validate()
+            yield rec.to_dict()
+
+    n = write_jsonl(resolve_path("doc_health"), records())
     warnings = []
+    if sum(outside.values()):
+        warnings.append(
+            f"WARN citations.jsonl names judgments that are not in judgments.jsonl ({dict(outside)}): it was built from "
+            "another corpus. Rebuild it (python -m m3_treatment.citations build) whenever M1 rebuilds judgments.jsonl."
+        )
+    if headnote is None and candidates:
+        warnings.append("WARN m3_mentions.jsonl not found: evidence could not prefer reasoning sentences over the headnote")
     if why_not and not flagged:
         warnings.append(
             f"WARN {sum(why_not.values())} negative label(s) but none lowered any health: {dict(why_not)}. "
@@ -546,7 +595,14 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("build", help="extract + citations + health (needs the LLM cache, or --labels baseline)")
     b.add_argument("--labels", choices=("llm", "baseline"))
     args = ap.parse_args(argv)
+    try:
+        return _run(args)
+    except (FileNotFoundError, RuntimeError) as exc:  # a missing input or an unfinished earlier step: one clear line
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
+
+def _run(args: argparse.Namespace) -> int:
     if args.cmd in ("extract", "build"):
         rep = run_extract(getattr(args, "limit", None))
         print(rep.pop("markdown"))

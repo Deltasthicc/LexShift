@@ -61,8 +61,10 @@ m3_treatment:
     min_stop_df: 5
     range_name_agreement: 0.3
   llm:                              # offline only; never imported by health()/authority()
-    model: gemini-2.5-flash         # any Gemini model id; the cache key includes it
-    cache: data/cache/m3_llm_labels.jsonl
+    model: gemini-2.5-flash         # a STABLE Gemini id (never *-latest / *-preview: refused); the cache key includes it,
+                                    # and each cache row records the model_version that answered. Gemini 3 ids want temperature 1.0
+    temperature: 0.0
+    cache: data/llm_labels/m3_llm_labels.jsonl   # committed (D-033): rebuilding doc_health.jsonl needs no API key
     batch_size: 10                  # windows per request
     min_interval_s: 1.0             # pacing between requests (free-tier rate limits)
     max_retries: 4

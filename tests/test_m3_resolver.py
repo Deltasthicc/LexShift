@@ -103,3 +103,14 @@ def test_data_checks_flag_missing_m1_fields():
     assert "bench" in bad.data_checks()[0][1] and "never" in bad.data_checks()[0][1]
     half = CorpusIndex([rec("2013_1_1_9", "A v. B", "2013-01-01", bench=2), rec("2013_1_10_19", "C v. D", "2013-01-01"), rec("2013_1_20_29", "E v. F", "2013-01-01")])
     assert half.data_checks()[0][0] == "WARN"
+
+
+def test_the_coram_line_wins_over_a_stored_bench_size():
+    """M1 stored 7 three-judge benches as 2 ("Vikram Nath, Sanjay Karol" kept as one name); the coram line is right."""
+    from m3_treatment.resolver import bench_of
+
+    text = "Some headnote.\n[Vikram Nath, Sanjay Karol and Sandeep Mehta,* JJ.]\nJudgment follows."
+    assert bench_of({"bench_size": 2, "judges": ["Vikram Nath, Sanjay Karol", "Sandeep Mehta"], "text": text}) == 3
+    assert bench_of({"bench_size": 2, "judges": [], "text": "no coram line here"}) == 2
+    assert bench_of({"bench_size": None, "judges": ["A", "B", "C"], "text": ""}) == 3
+    assert bench_of({"bench_size": None, "judges": ["Author only"], "text": ""}) is None
