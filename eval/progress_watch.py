@@ -182,6 +182,10 @@ def integrate() -> tuple[list[str], dict[str, list[str]], str]:
 
 def refresh_vendored() -> None:
     """A worktree made before .gitattributes marked the vendored files byte-exact holds line-ending-converted copies of them: rewrite those from HEAD."""
+    import shutil
+
+    for rel in ("app/web/static/vendor", "app/web/static/fonts"):
+        shutil.rmtree(WT / rel, ignore_errors=True)  # git does not rewrite a file whose normalised content already matches, so remove first
     git("checkout", "HEAD", "--", "app/web/static/vendor", "app/web/static/fonts", cwd=WT)
 
 
